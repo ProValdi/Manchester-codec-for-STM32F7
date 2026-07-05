@@ -5,12 +5,12 @@
  * If the application already defines one of these callbacks, omit this file and
  * call the matching Manchester_On... dispatcher from the existing callback.
  */
-void HAL_SPI_TxRxHalfCpltCallback(SPI_HandleTypeDef *hspi)
+void HAL_SPI_RxHalfCpltCallback(SPI_HandleTypeDef *hspi)
 {
     Manchester_OnSpiTxRxHalfComplete(hspi);
 }
 
-void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
+void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
     Manchester_OnSpiTxRxComplete(hspi);
 }

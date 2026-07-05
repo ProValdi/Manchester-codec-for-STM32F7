@@ -9,7 +9,7 @@
 #define MAN_MAX_NO_EDGE_CHIPS 3LL
 
 #define MAN_DEBUG_EDGE_COUNT 64u
-#define MAN_SPI_INTERBYTE_GAP_SAMPLES 2u
+#define MAN_SPI_INTERBYTE_GAP_SAMPLES 0u
 
 volatile uint16_t g_dbg_edge_deltas[MAN_DEBUG_EDGE_COUNT];
 volatile uint32_t g_dbg_edge_delta_count;

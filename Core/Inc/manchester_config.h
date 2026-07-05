@@ -34,6 +34,18 @@
 #define MAN_GLITCH_FILTER_MAX_SAMPLES 4u
 #define MAN_FEC_CONTEXT_BYTES         64u
 
+/*
+ * Минимальное число SPI-отсчётов на один Manchester-chip.
+ *
+ * Один информационный бит содержит два chip.
+ */
+#define MAN_RX_MIN_SAMPLES_PER_CHIP  6u
+
+/*
+ * Максимальная допустимая частота SPI1 slave.
+ */
+#define MAN_RX_SAMPLE_CLOCK_MAX_HZ   54000000u
+
 /* Default DMA placement: dedicated linker section. */
 #if defined(__GNUC__)
 #define MAN_DMA_BUFFER __attribute__((section(".dma_buffer"), aligned(32)))

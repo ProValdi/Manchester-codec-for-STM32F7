@@ -37,12 +37,11 @@ static man_platform_t g_hw;
 static man_runtime_config_t g_cfg;
 static man_diagnostics_t g_diag;
 static bool g_initialized;
-static uint32_t g_spi_sample_rate_hz;
+static uint32_t g_rx_sample_rate_hz;
 static const man_fec_codec_t *g_fec;
 static man_rx_decoder_t g_decoder;
 
 static MAN_DMA_BUFFER uint8_t g_spi_rx_dma[MAN_SPI_DMA_BYTES];
-static MAN_DMA_BUFFER uint8_t g_spi_dummy_tx_dma[MAN_SPI_DMA_BYTES];
 static MAN_DMA_BUFFER uint8_t g_uart_rx_dma[MAN_UART_RX_DMA_BYTES];
 static MAN_DMA_BUFFER uint8_t g_uart_tx_dma[MAN_UART_TX_STAGE_BYTES];
 static MAN_DMA_BUFFER uint32_t g_tx_bsrr[MAN_TX_MAX_CHIPS];
@@ -110,6 +109,16 @@ static void dbg_toggle(GPIO_TypeDef *port, uint16_t pin)
     }
 }
 
+static uint32_t apb2_timer_clock_hz(void)
+{
+    const uint32_t pclk2 = HAL_RCC_GetPCLK2Freq();
+    const uint32_t ppre2 = RCC->CFGR & RCC_CFGR_PPRE2;
+
+    return ppre2 == 0u
+        ? pclk2
+        : pclk2 * 2u;
+}
+
 static uint32_t timer_input_clock_hz(TIM_HandleTypeDef *htim)
 {
     (void)htim; /* TIM1 is on APB2 for the required target. */
@@ -132,45 +141,266 @@ static uint32_t spi_prescaler_constant(uint32_t divisor)
     }
 }
 
-static bool configure_spi_rate(void)
+static bool configure_spi_slave(void)
 {
-    static const uint16_t divisors[] = {256u, 128u, 64u, 32u, 16u, 8u, 4u, 2u};
-    const uint32_t pclk = HAL_RCC_GetPCLK2Freq();
-    const uint32_t chip_rate = g_cfg.bitrate_bps * 2u;
-    uint32_t selected = 0u;
-    for (size_t i = 0u; i < sizeof(divisors) / sizeof(divisors[0]); ++i) {
-        const uint32_t sample_rate = pclk / divisors[i];
-        if (sample_rate <= 54000000u && sample_rate >= chip_rate * 6u) {
-            selected = divisors[i];
+    SPI_HandleTypeDef *hspi = g_hw.hspi_rx;
+
+    if (hspi == NULL) {
+        return false;
+    }
+
+    (void)HAL_SPI_DeInit(hspi);
+
+    hspi->Init.Mode = SPI_MODE_SLAVE;
+    hspi->Init.Direction = SPI_DIRECTION_2LINES_RXONLY;
+    hspi->Init.DataSize = SPI_DATASIZE_8BIT;
+
+    /* TIM8 SCLK должен иметь idle LOW. */
+    hspi->Init.CLKPolarity = SPI_POLARITY_LOW;
+    hspi->Init.CLKPhase = SPI_PHASE_1EDGE;
+
+    /*
+     * NSS должен быть физически притянут к LOW,
+     * пока приёмник должен принимать данные.
+     */
+    hspi->Init.NSS = SPI_NSS_HARD_INPUT;
+
+    /*
+     * В slave mode prescaler игнорируется,
+     * но HAL требует корректное значение структуры.
+     */
+    hspi->Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+
+    hspi->Init.FirstBit = SPI_FIRSTBIT_MSB;
+    hspi->Init.TIMode = SPI_TIMODE_DISABLE;
+    hspi->Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+    hspi->Init.CRCPolynomial = 7u;
+
+    return HAL_SPI_Init(hspi) == HAL_OK;
+}
+
+
+static bool calculate_rx_clock_ticks(
+    uint32_t timer_clock_hz,
+    uint32_t bitrate_bps,
+    uint32_t *ticks_out,
+    uint32_t *sample_rate_out)
+{
+    if (ticks_out == NULL ||
+        sample_rate_out == NULL ||
+        bitrate_bps == 0u) {
+        return false;
+    }
+
+    const uint64_t chip_rate_hz =
+        (uint64_t)bitrate_bps * 2u;
+
+    const uint64_t minimum_sample_rate_hz =
+        chip_rate_hz * MAN_RX_MIN_SAMPLES_PER_CHIP;
+
+    if (minimum_sample_rate_hz >
+        MAN_RX_SAMPLE_CLOCK_MAX_HZ) {
+        return false;
+    }
+
+    /*
+     * Максимальный divider даёт минимальную частоту,
+     * которая всё ещё обеспечивает необходимый oversampling.
+     */
+    uint32_t max_ticks =
+        (uint32_t)(timer_clock_hz /
+                   minimum_sample_rate_hz);
+
+    uint32_t min_ticks =
+        (timer_clock_hz +
+         MAN_RX_SAMPLE_CLOCK_MAX_HZ - 1u) /
+        MAN_RX_SAMPLE_CLOCK_MAX_HZ;
+
+    if (min_ticks == 0u) {
+        min_ticks = 1u;
+    }
+
+    /*
+     * TIM8 является 16-битным таймером.
+     */
+    if (max_ticks > 65536u) {
+        max_ticks = 65536u;
+    }
+
+    if (max_ticks < min_ticks) {
+        return false;
+    }
+
+    /*
+     * Ищем наибольший чётный divider:
+     *
+     * - минимальная нагрузка DMA/CPU;
+     * - точная частота;
+     * - точный duty cycle 50%.
+     */
+//    for (uint32_t ticks = max_ticks;
+//         ticks >= min_ticks;
+//         --ticks) {
+//
+//        if ((ticks & 1u) != 0u) {
+//            continue;
+//        }
+//
+//        if ((timer_clock_hz % ticks) != 0u) {
+//            continue;
+//        }
+//
+//        const uint32_t actual_rate =
+//            timer_clock_hz / ticks;
+//
+//        if (actual_rate <
+//                minimum_sample_rate_hz ||
+//            actual_rate >
+//                MAN_RX_SAMPLE_CLOCK_MAX_HZ) {
+//            continue;
+//        }
+//
+//        *ticks_out = ticks;
+//        *sample_rate_out = actual_rate;
+//        return true;
+//    }
+
+
+
+    uint32_t ticks = max_ticks;
+
+    for (;;) {
+        if ((ticks & 1u) == 0u &&
+            (timer_clock_hz % ticks) == 0u) {
+
+            const uint32_t actual_rate =
+                timer_clock_hz / ticks;
+
+            if (actual_rate >= minimum_sample_rate_hz &&
+                actual_rate <= MAN_RX_SAMPLE_CLOCK_MAX_HZ) {
+
+                *ticks_out = ticks;
+                *sample_rate_out = actual_rate;
+                return true;
+            }
+        }
+
+        if (ticks == min_ticks) {
             break;
         }
+
+        --ticks;
     }
-    if (selected == 0u) {
+
+    return false;
+}
+
+
+static bool configure_rx_sample_clock(void)
+{
+    TIM_HandleTypeDef *htim = g_hw.htim_rx_clk;
+
+    if (htim == NULL) {
         return false;
     }
 
-    SPI_HandleTypeDef *h = g_hw.hspi_rx;
-    (void)HAL_SPI_DeInit(h);
-    h->Init.Mode = SPI_MODE_MASTER;
-    h->Init.Direction = SPI_DIRECTION_2LINES;
-    h->Init.DataSize = SPI_DATASIZE_8BIT;
-    h->Init.CLKPolarity = SPI_POLARITY_LOW;
-    h->Init.CLKPhase = SPI_PHASE_1EDGE;
-    h->Init.NSS = SPI_NSS_SOFT;
-    h->Init.BaudRatePrescaler = spi_prescaler_constant(selected);
-    h->Init.FirstBit = SPI_FIRSTBIT_MSB;
-    h->Init.TIMode = SPI_TIMODE_DISABLE;
-    h->Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-    h->Init.CRCPolynomial = 7u;
-    if (HAL_SPI_Init(h) != HAL_OK) {
+    const uint32_t timer_clock_hz =
+        apb2_timer_clock_hz();
+
+    uint32_t ticks = 0u;
+    uint32_t actual_sample_rate_hz = 0u;
+
+    if (!calculate_rx_clock_ticks(
+            timer_clock_hz,
+            g_cfg.bitrate_bps,
+            &ticks,
+            &actual_sample_rate_hz)) {
         return false;
     }
-    g_spi_sample_rate_hz = pclk / selected;
 
-    g_dbg_pclk2_hz = pclk;
-    g_dbg_spi_divisor = selected;
+    /*
+     * Таймер пока только настраивается.
+     * Запустим его после запуска SPI RX DMA.
+     */
+    __HAL_TIM_DISABLE(htim);
+
+    __HAL_TIM_SET_PRESCALER(htim, 0u);
+    __HAL_TIM_SET_AUTORELOAD(htim, ticks - 1u);
+
+    /*
+     * PWM 50%.
+     */
+    __HAL_TIM_SET_COMPARE(
+        htim,
+        g_hw.tim_rx_clk_channel,
+        ticks / 2u
+    );
+
+    __HAL_TIM_SET_COUNTER(htim, 0u);
+
+    /*
+     * Немедленно загрузить PSC/ARR/CCR.
+     */
+    HAL_TIM_GenerateEvent(
+        htim,
+        TIM_EVENTSOURCE_UPDATE
+    );
+
+    __HAL_TIM_CLEAR_FLAG(
+        htim,
+        TIM_FLAG_UPDATE
+    );
+
+    /*
+     * Это теперь фактическая частота внешнего sampling clock.
+     * Декодер должен использовать именно её.
+     */
+    g_rx_sample_rate_hz = actual_sample_rate_hz;
+
     return true;
 }
+
+
+
+//static bool configure_spi_rate(void)
+//{
+//    static const uint16_t divisors[] = {256u, 128u, 64u, 32u, 16u, 8u, 4u, 2u};
+//    const uint32_t pclk = HAL_RCC_GetPCLK2Freq();
+//    const uint32_t chip_rate = g_cfg.bitrate_bps * 2u;
+//    uint32_t selected = 0u;
+//    for (size_t i = 0u; i < sizeof(divisors) / sizeof(divisors[0]); ++i) {
+//        const uint32_t sample_rate = pclk / divisors[i];
+//        if (sample_rate <= 54000000u && sample_rate >= chip_rate * 6u) {
+//            selected = divisors[i];
+//            break;
+//        }
+//    }
+//    if (selected == 0u) {
+//        return false;
+//    }
+//
+//    SPI_HandleTypeDef *h = g_hw.hspi_rx;
+//    (void)HAL_SPI_DeInit(h);
+//    h->Init.Mode = SPI_MODE_MASTER;
+//    h->Init.Direction = SPI_DIRECTION_2LINES;
+//    h->Init.DataSize = SPI_DATASIZE_16BIT;
+//    h->Init.CLKPolarity = SPI_POLARITY_LOW;
+//    h->Init.CLKPhase = SPI_PHASE_1EDGE;
+//    h->Init.NSS = SPI_NSS_SOFT;
+//    h->Init.BaudRatePrescaler = spi_prescaler_constant(selected);
+//    h->Init.FirstBit = SPI_FIRSTBIT_MSB;
+//    h->Init.TIMode = SPI_TIMODE_DISABLE;
+//    h->Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+//    h->Init.CRCPolynomial = 7u;
+//    if (HAL_SPI_Init(h) != HAL_OK) {
+//        return false;
+//    }
+//    g_rx_sample_rate_hz = pclk / selected;
+//
+//    g_dbg_pclk2_hz = pclk;
+//    g_dbg_spi_divisor = selected;
+//    return true;
+//}
 
 static bool configure_tim_rate(void)
 {
@@ -235,16 +465,15 @@ bool Manchester_ServiceInit(const man_platform_t *platform, const man_runtime_co
     if (g_fec == NULL) {
         return false; /* Hamming is intentionally only an extension point in this revision. */
     }
-    memset(g_spi_dummy_tx_dma, 0, sizeof(g_spi_dummy_tx_dma));
     led_set(g_hw.led_ok_port, g_hw.led_ok_pin, false);
     led_set(g_hw.led_tx_port, g_hw.led_tx_pin, false);
     led_set(g_hw.led_error_port, g_hw.led_error_pin, false);
     HAL_GPIO_WritePin(g_hw.tx_port, g_hw.tx_pin, g_cfg.tx_invert ? GPIO_PIN_SET : GPIO_PIN_RESET);
 
-    if (!configure_spi_rate() || !configure_tim_rate()) {
+    if (!configure_spi_slave() || !configure_rx_sample_clock() || !configure_tim_rate()) {
         return false;
     }
-    if (!man_rx_decoder_init(&g_decoder, &g_cfg, g_spi_sample_rate_hz, g_fec, &g_diag, NULL, NULL)) {
+    if (!man_rx_decoder_init(&g_decoder, &g_cfg, g_rx_sample_rate_hz, g_fec, &g_diag, NULL, NULL)) {
         return false;
     }
     g_dbg_pattern_length_0 = g_decoder.paths[0].pattern_length;
@@ -396,6 +625,59 @@ static void debug_scan_raw_msb(
     }
 }
 
+static bool start_rx_sampling(void)
+{
+    dma_invalidate(
+        g_spi_rx_dma,
+        sizeof(g_spi_rx_dma)
+    );
+
+    /*
+     * Сначала SPI slave и DMA должны быть готовы
+     * принимать самый первый внешний SCLK.
+     */
+    if (HAL_SPI_Receive_DMA(
+            g_hw.hspi_rx,
+            g_spi_rx_dma,
+            MAN_SPI_DMA_BYTES) != HAL_OK) {
+        return false;
+    }
+
+    /*
+     * Только теперь запускаем внешний clock.
+     */
+    if (HAL_TIM_PWM_Start(
+            g_hw.htim_rx_clk,
+            g_hw.tim_rx_clk_channel) != HAL_OK) {
+
+        (void)HAL_SPI_Abort(
+            g_hw.hspi_rx
+        );
+
+        return false;
+    }
+
+    return true;
+}
+
+static void stop_rx_sampling(void)
+{
+    /*
+     * Сначала прекращаем внешний SCLK.
+     */
+    (void)HAL_TIM_PWM_Stop(
+        g_hw.htim_rx_clk,
+        g_hw.tim_rx_clk_channel
+    );
+
+    /*
+     * Потом останавливаем SPI/DMA.
+     */
+    (void)HAL_SPI_Abort(
+        g_hw.hspi_rx
+    );
+}
+
 static void ManchesterRxTask(void *argument)
 {
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
@@ -406,22 +688,23 @@ static void ManchesterRxTask(void *argument)
     (void)argument;
     g_decoder.callback = rx_frame_to_queue;
     g_decoder.callback_user = NULL;
-    dma_clean(g_spi_dummy_tx_dma, sizeof(g_spi_dummy_tx_dma));
-    dma_invalidate(g_spi_rx_dma, sizeof(g_spi_rx_dma));
-    if (HAL_SPI_TransmitReceive_DMA(g_hw.hspi_rx, g_spi_dummy_tx_dma, g_spi_rx_dma, MAN_SPI_DMA_BYTES) != HAL_OK) {
-        ++g_diag.dma_overruns;
-        led_set(g_hw.led_error_port, g_hw.led_error_pin, true);
+
+    if (!start_rx_sampling()) {
+    	++g_diag.dma_overruns;
+    	led_set(g_hw.led_error_port, g_hw.led_error_pin, true);
     }
 
     for (;;) {
         (void)osThreadFlagsWait(RX_FLAG_HALF | RX_FLAG_FULL | RX_FLAG_ERROR, osFlagsWaitAny, osWaitForever);
         const uint32_t pending = take_spi_pending();
+
         if ((pending & RX_FLAG_ERROR) != 0u) {
+            stop_rx_sampling();
             man_rx_decoder_reset(&g_decoder);
-            (void)HAL_SPI_Abort(g_hw.hspi_rx);
-            if (HAL_SPI_TransmitReceive_DMA(g_hw.hspi_rx, g_spi_dummy_tx_dma, g_spi_rx_dma, MAN_SPI_DMA_BYTES) != HAL_OK) {
-                ++g_diag.dma_overruns;
-            }
+            if (!start_rx_sampling()) {
+				++g_diag.dma_overruns;
+				led_set(g_hw.led_error_port, g_hw.led_error_pin, true);
+			}
         }
         if ((pending & RX_FLAG_HALF) != 0u) {
         	check_decoder_integrity();
@@ -718,8 +1001,24 @@ static void UartTask(void *argument)
     start_uart_rx();
 
     for (;;) {
-        const uint32_t flags = osThreadFlagsWait(UART_FLAG_RX | UART_FLAG_TX_DONE | UART_FLAG_ERROR,
+        uint32_t flags = osThreadFlagsWait(UART_FLAG_RX | UART_FLAG_TX_DONE | UART_FLAG_ERROR,
                                                   osFlagsWaitAny, 10u);
+
+        /*
+         * Timeout нужен для проверки программного UART idle.
+         * Это не UART error и не набор thread flags.
+         */
+        if (flags == osFlagsErrorTimeout) {
+            flags = 0u;
+        } else if ((flags & osFlagsError) != 0u) {
+            /*
+             * Настоящая ошибка CMSIS-RTOS API.
+             * Не интерпретируем код ошибки как битовую маску flags.
+             */
+            ++g_diag.uart_overruns;
+            flags = 0u;
+        }
+
         if ((flags & UART_FLAG_ERROR) != 0u) {
             (void)HAL_UART_AbortReceive(g_hw.huart);
             taskENTER_CRITICAL();
@@ -752,11 +1051,15 @@ static void UartTask(void *argument)
             last_position = event.position % MAN_UART_RX_DMA_BYTES;
             dbg_toggle(g_hw.dbg_uart_port, g_hw.dbg_uart_pin);
 
-            const bool idle = event.type == UART_EVENT_IDLE;
-            if (idle && assembly_length == 0u && is_stats_command(g_uart_temporary, copied)) {
+            const bool hardware_idle = event.type == UART_EVENT_IDLE;
+            if (hardware_idle && assembly_length == 0u && is_stats_command(g_uart_temporary, copied)) {
                 queue_stats();
             } else {
-                consume_uart_block(g_uart_temporary, copied, idle, g_uart_assembly, &assembly_length, &stream_open);
+                /*
+                 * Hardware IDLE не завершает логический блок.
+                 * Он может возникать между USB-пакетами одного port.write().
+                 */
+                consume_uart_block(g_uart_temporary, copied, false, g_uart_assembly, &assembly_length, &stream_open);
             }
             if (copied != 0u) {
                 last_rx_tick = osKernelGetTickCount();
@@ -766,7 +1069,8 @@ static void UartTask(void *argument)
                 consume_uart_block(NULL, 0u, true, g_uart_assembly, &assembly_length, &stream_open);
             }
         }
-        if (g_cfg.transfer_mode == MAN_MODE_STREAM && stream_open &&
+        const bool block_pending = assembly_length != 0u || stream_open;
+        if (block_pending &&
             g_cfg.uart_idle_flush_ms != 0u &&
             (osKernelGetTickCount() - last_rx_tick) >= g_cfg.uart_idle_flush_ms) {
             consume_uart_block(NULL, 0u, true, g_uart_assembly, &assembly_length, &stream_open);
@@ -890,5 +1194,5 @@ const man_diagnostics_t *Manchester_GetDiagnostics(void)
 
 uint32_t Manchester_GetSpiSampleRateHz(void)
 {
-    return g_spi_sample_rate_hz;
+    return g_rx_sample_rate_hz;
 }

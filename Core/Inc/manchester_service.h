@@ -13,6 +13,9 @@ typedef struct {
     TIM_HandleTypeDef *htim_tx;       /* expected: &htim1 */
     UART_HandleTypeDef *huart;        /* expected: &huart3 */
 
+    TIM_HandleTypeDef *htim_rx_clk;   /* Continuous SPI SCLK: expected &htim8 */
+    uint32_t tim_rx_clk_channel;      /* TIM_CHANNEL_1 ... TIM_CHANNEL_4: expected TIM_CHANNEL_1 */
+
     GPIO_TypeDef *tx_port;
     uint16_t tx_pin;
     GPIO_TypeDef *led_ok_port;
