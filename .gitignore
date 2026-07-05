@@ -1,0 +1,17 @@
+Middlewares/*
+Drivers/*
+Debug/*
+.settings/*
+
+
+# Разрешаем саму папку (чтобы Git видел, что она есть)
+!Debug/
+
+# Разрешаем только файлы .md внутри docs и её подпапок
+!Debug/*.bin
+!Debug/*.elf
+!Debug/*.hex
+!Debug/*.list
+!Debug/*.map
+
+
