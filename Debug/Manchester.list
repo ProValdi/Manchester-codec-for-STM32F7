@@ -904,11 +904,11 @@ __STATIC_INLINE void SCB_EnableICache (void)
  8000908:	6104      	str	r4, [r0, #16]
   huart3.Instance = USART3;
  800090a:	6003      	str	r3, [r0, #0]
-  huart3.Init.BaudRate = 115200;
- 800090c:	f44f 33e1 	mov.w	r3, #115200	@ 0x1c200
+  huart3.Init.BaudRate = 460800;
+ 800090c:	f44f 23e1 	mov.w	r3, #460800	@ 0x70800
   huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
  8000910:	6184      	str	r4, [r0, #24]
-  huart3.Init.BaudRate = 115200;
+  huart3.Init.BaudRate = 460800;
  8000912:	6043      	str	r3, [r0, #4]
   huart3.Init.Mode = UART_MODE_TX_RX;
  8000914:	230c      	movs	r3, #12

@@ -69,7 +69,7 @@ static const man_runtime_config_t man_cfg = {
     .max_single_message = 4096,
     .preamble_bytes = 8,
     .sync_word = 0xD391,
-    .glitch_filter_samples = 0u,
+    .glitch_filter_samples = 1u,
     .uart_idle_flush_ms = 10,
     .uart_explicit_block_length = 0,
     .fec_enabled = false,
@@ -439,7 +439,7 @@ static void MX_USART3_UART_Init(void)
   /* USER CODE BEGIN USART3_Init 1 */
   /* USER CODE END USART3_Init 1 */
   huart3.Instance = USART3;
-  huart3.Init.BaudRate = 115200;
+  huart3.Init.BaudRate = 460800;
   huart3.Init.WordLength = UART_WORDLENGTH_8B;
   huart3.Init.StopBits = UART_STOPBITS_1;
   huart3.Init.Parity = UART_PARITY_NONE;
