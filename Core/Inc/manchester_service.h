@@ -9,7 +9,7 @@
 #include "manchester_types.h"
 
 typedef struct {
-    SPI_HandleTypeDef *hspi_rx;       /* expected: &hspi1 */
+    SPI_HandleTypeDef *hspi_rx;       /* expected: &hspi4 */
     TIM_HandleTypeDef *htim_tx;       /* expected: &htim1 */
     UART_HandleTypeDef *huart;        /* expected: &huart3 */
 
@@ -18,6 +18,16 @@ typedef struct {
 
     GPIO_TypeDef *tx_port;
     uint16_t tx_pin;
+
+    GPIO_TypeDef *rf_recv_port;
+    uint16_t rf_recv_pin;
+
+    GPIO_TypeDef *rf_trans_port;
+    uint16_t rf_trans_pin;
+
+    uint32_t rf_tx_settle_ms;
+    uint32_t rf_rx_settle_ms;
+
     GPIO_TypeDef *led_ok_port;
     uint16_t led_ok_pin;
     GPIO_TypeDef *led_tx_port;

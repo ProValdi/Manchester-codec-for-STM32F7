@@ -89,6 +89,56 @@ volatile uint32_t g_dbg_timer_clock_hz;
 volatile uint32_t g_dbg_spi_divisor;
 volatile uint32_t g_dbg_timer_ticks;
 
+static volatile bool g_rx_muted = false;
+static volatile bool g_rx_reset_requested = false;
+
+static void tx_set_idle_level(void)
+{
+    const GPIO_PinState idle =
+        g_cfg.tx_invert ? GPIO_PIN_SET : GPIO_PIN_RESET;
+
+    HAL_GPIO_WritePin(g_hw.tx_port, g_hw.tx_pin, idle);
+}
+
+static bool is_rf_halfduplex(void)
+{
+    return g_cfg.phy_mode == MAN_PHY_RF_HALFDUPLEX;
+}
+
+static void rf_enter_tx_mode(void)
+{
+    if (!is_rf_halfduplex()) {
+        return;
+    }
+
+    g_rx_muted = true;
+    g_rx_reset_requested = true;
+
+    HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
+
+    if (g_hw.rf_tx_settle_ms != 0u) {
+        osDelay(g_hw.rf_tx_settle_ms);
+    }
+}
+
+static void rf_enter_rx_mode(void)
+{
+    if (!is_rf_halfduplex()) {
+        return;
+    }
+
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
+
+    if (g_hw.rf_rx_settle_ms != 0u) {
+        osDelay(g_hw.rf_rx_settle_ms);
+    }
+
+    g_rx_reset_requested = true;
+    g_rx_muted = false;
+}
+
 __weak void Manchester_TestHookMutateWireBits(uint8_t *wire_bits, size_t bit_count)
 {
     (void)wire_bits;
@@ -360,48 +410,6 @@ static bool configure_rx_sample_clock(void)
     return true;
 }
 
-
-
-//static bool configure_spi_rate(void)
-//{
-//    static const uint16_t divisors[] = {256u, 128u, 64u, 32u, 16u, 8u, 4u, 2u};
-//    const uint32_t pclk = HAL_RCC_GetPCLK2Freq();
-//    const uint32_t chip_rate = g_cfg.bitrate_bps * 2u;
-//    uint32_t selected = 0u;
-//    for (size_t i = 0u; i < sizeof(divisors) / sizeof(divisors[0]); ++i) {
-//        const uint32_t sample_rate = pclk / divisors[i];
-//        if (sample_rate <= 54000000u && sample_rate >= chip_rate * 6u) {
-//            selected = divisors[i];
-//            break;
-//        }
-//    }
-//    if (selected == 0u) {
-//        return false;
-//    }
-//
-//    SPI_HandleTypeDef *h = g_hw.hspi_rx;
-//    (void)HAL_SPI_DeInit(h);
-//    h->Init.Mode = SPI_MODE_MASTER;
-//    h->Init.Direction = SPI_DIRECTION_2LINES;
-//    h->Init.DataSize = SPI_DATASIZE_16BIT;
-//    h->Init.CLKPolarity = SPI_POLARITY_LOW;
-//    h->Init.CLKPhase = SPI_PHASE_1EDGE;
-//    h->Init.NSS = SPI_NSS_SOFT;
-//    h->Init.BaudRatePrescaler = spi_prescaler_constant(selected);
-//    h->Init.FirstBit = SPI_FIRSTBIT_MSB;
-//    h->Init.TIMode = SPI_TIMODE_DISABLE;
-//    h->Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-//    h->Init.CRCPolynomial = 7u;
-//    if (HAL_SPI_Init(h) != HAL_OK) {
-//        return false;
-//    }
-//    g_rx_sample_rate_hz = pclk / selected;
-//
-//    g_dbg_pclk2_hz = pclk;
-//    g_dbg_spi_divisor = selected;
-//    return true;
-//}
-
 static bool configure_tim_rate(void)
 {
     const uint32_t timer_clock = timer_input_clock_hz(g_hw.htim_tx);
@@ -462,13 +470,19 @@ bool Manchester_ServiceInit(const man_platform_t *platform, const man_runtime_co
     g_hw = *platform;
     g_cfg = *config;
     g_fec = config->fec_enabled ? man_fec_hamming74_codec() : man_fec_identity_codec();
+
+    // Инициализация приемника СШП модема - изначально слушаем
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
+	g_rx_muted = false;
+
     if (g_fec == NULL) {
         return false; /* Hamming is intentionally only an extension point in this revision. */
     }
     led_set(g_hw.led_ok_port, g_hw.led_ok_pin, false);
     led_set(g_hw.led_tx_port, g_hw.led_tx_pin, false);
     led_set(g_hw.led_error_port, g_hw.led_error_pin, false);
-    HAL_GPIO_WritePin(g_hw.tx_port, g_hw.tx_pin, g_cfg.tx_invert ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    tx_set_idle_level();
 
     if (!configure_spi_slave() || !configure_rx_sample_clock() || !configure_tim_rate()) {
         return false;
@@ -542,11 +556,18 @@ static void process_rx_half(const uint8_t *data)
 {
     const uint32_t started = DWT->CYCCNT;
 
-    man_rx_decoder_feed_packed(
-        &g_decoder,
-        data,
-        MAN_SPI_DMA_HALF_BYTES
-    );
+    if (g_rx_reset_requested) {
+        man_rx_decoder_reset(&g_decoder);
+        g_rx_reset_requested = false;
+    }
+
+    if (!g_rx_muted) {
+        man_rx_decoder_feed_packed(
+            &g_decoder,
+            data,
+            MAN_SPI_DMA_HALF_BYTES
+        );
+    }
 
     const uint32_t elapsed = DWT->CYCCNT - started;
 
@@ -724,9 +745,7 @@ static void ManchesterRxTask(void *argument)
 //            debug_scan_raw_msb(
 //                &g_spi_rx_dma[0],
 //                MAN_SPI_DMA_HALF_BYTES);
-            process_rx_half(
-                &g_spi_rx_dma[MAN_SPI_DMA_HALF_BYTES]
-            );
+            process_rx_half(&g_spi_rx_dma[MAN_SPI_DMA_HALF_BYTES]);
 //            man_rx_decoder_feed_packed(&g_decoder, &g_spi_rx_dma[MAN_SPI_DMA_HALF_BYTES], MAN_SPI_DMA_HALF_BYTES);
         }
     }
@@ -745,6 +764,7 @@ static void tx_dma_done(DMA_HandleTypeDef *hdma)
     (void)hdma;
     __HAL_TIM_DISABLE_DMA(g_hw.htim_tx, TIM_DMA_UPDATE);
     __HAL_TIM_DISABLE(g_hw.htim_tx);
+    tx_set_idle_level();
     if (g_tx_task != NULL) {
         (void)osThreadFlagsSet(g_tx_task, TX_FLAG_DONE);
     }
@@ -755,6 +775,7 @@ static void tx_dma_error(DMA_HandleTypeDef *hdma)
     (void)hdma;
     __HAL_TIM_DISABLE_DMA(g_hw.htim_tx, TIM_DMA_UPDATE);
     __HAL_TIM_DISABLE(g_hw.htim_tx);
+    tx_set_idle_level();
     if (g_tx_task != NULL) {
         (void)osThreadFlagsSet(g_tx_task, TX_FLAG_ERROR);
     }
@@ -770,7 +791,7 @@ static bool start_tx_frame(const man_packet_t *packet)
     }
     Manchester_TestHookMutateWireBits(g_tx_wire_bits, wire_bit_count);
     if (!man_line_encode_bsrr(g_tx_wire_bits, wire_bit_count, g_cfg.encoding, g_cfg.tx_invert,
-                             0u, g_hw.tx_pin, g_tx_bsrr, MAN_TX_MAX_CHIPS, &chip_count)) {
+    		g_cfg.tx_invert ? 1u : 0u, g_hw.tx_pin, g_tx_bsrr, MAN_TX_MAX_CHIPS, &chip_count)) {
         return false;
     }
     DMA_HandleTypeDef *hdma = g_hw.htim_tx->hdma[TIM_DMA_ID_UPDATE];
@@ -781,6 +802,7 @@ static bool start_tx_frame(const man_packet_t *packet)
     hdma->XferCpltCallback = tx_dma_done;
     hdma->XferErrorCallback = tx_dma_error;
     dma_clean(g_tx_bsrr, chip_count * sizeof(g_tx_bsrr[0]));
+    tx_set_idle_level();
     __HAL_TIM_SET_COUNTER(g_hw.htim_tx, 0u);
     __HAL_TIM_CLEAR_FLAG(g_hw.htim_tx, TIM_FLAG_UPDATE);
     if (HAL_DMA_Start_IT(hdma, (uint32_t)(uintptr_t)g_tx_bsrr, (uint32_t)(uintptr_t)&g_hw.tx_port->BSRR, (uint32_t)chip_count) != HAL_OK) {
@@ -801,19 +823,65 @@ static void ManchesterTxTask(void *argument)
         }
         led_set(g_hw.led_tx_port, g_hw.led_tx_pin, true);
         dbg_toggle(g_hw.dbg_tx_port, g_hw.dbg_tx_pin);
+
+        // Если хотим transceiver для отладки по одному проводу, то включаем MAN_PHY_WIRED_LOOPBACK
+        if (is_rf_halfduplex()) {
+            g_rx_reset_requested = true;
+            rf_enter_tx_mode();
+        }
+
+        /*
+         * Защита от старого флага TX_DONE/TX_ERROR.
+         */
+        osThreadFlagsClear(TX_FLAG_DONE | TX_FLAG_ERROR);
+
         if (!start_tx_frame(&packet)) {
+        	// Если хотим transceiver для отладки по одному проводу, то включаем MAN_PHY_WIRED_LOOPBACK
+            if (is_rf_halfduplex()) {
+                rf_enter_rx_mode();
+                g_rx_reset_requested = true;
+            }
+
             ++g_diag.dma_overruns;
             led_set(g_hw.led_error_port, g_hw.led_error_pin, true);
+            led_set(g_hw.led_tx_port, g_hw.led_tx_pin, false);
             continue;
         }
         const uint32_t result = osThreadFlagsWait(TX_FLAG_DONE | TX_FLAG_ERROR, osFlagsWaitAny, osWaitForever);
-        led_set(g_hw.led_tx_port, g_hw.led_tx_pin, false);
+        /*
+         * Возвращаемся в RX только когда это последний кадр логического блока.
+         *
+         * Для single:
+         *   END стоит на последнем фрагменте сообщения.
+         *
+         * Для stream:
+         *   END стоит на последнем блоке потока после idle timeout.
+         */
+//        if ((packet.flags & MAN_FLAG_END) != 0u) {
+//            rf_enter_rx_mode();
+//        }
+
         if ((result & TX_FLAG_DONE) != 0u) {
             ++g_diag.manchester_tx_frames;
         } else {
             ++g_diag.dma_overruns;
             led_set(g_hw.led_error_port, g_hw.led_error_pin, true);
         }
+
+        /*
+         * В RF half-duplex возвращаемся в RX только после последнего
+         * кадра логического сообщения.
+         *
+         * В wired loopback ничего не переключаем вообще.
+         */
+        if (is_rf_halfduplex() &&
+            (((packet.flags & MAN_FLAG_END) != 0u) ||
+             ((result & TX_FLAG_ERROR) != 0u))) {
+
+            rf_enter_rx_mode();
+        }
+
+        led_set(g_hw.led_tx_port, g_hw.led_tx_pin, false);
     }
 }
 

@@ -30,6 +30,11 @@ enum {
     MAN_FLAG_RESET = 1u << 3
 };
 
+typedef enum {
+    MAN_PHY_WIRED_LOOPBACK = 0,
+    MAN_PHY_RF_HALFDUPLEX  = 1,
+} man_phy_mode_t;
+
 typedef struct {
     man_encoding_t encoding;
     man_transfer_mode_t transfer_mode;
@@ -41,6 +46,7 @@ typedef struct {
     uint8_t glitch_filter_samples;
     uint32_t uart_idle_flush_ms;
     uint16_t uart_explicit_block_length;
+    man_phy_mode_t phy_mode;
     bool fec_enabled;
     bool tx_invert;
 } man_runtime_config_t;
