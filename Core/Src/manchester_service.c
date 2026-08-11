@@ -472,8 +472,8 @@ bool Manchester_ServiceInit(const man_platform_t *platform, const man_runtime_co
     g_fec = config->fec_enabled ? man_fec_hamming74_codec() : man_fec_identity_codec();
 
     // Инициализация приемника СШП модема - изначально слушаем
-    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
 	g_rx_muted = false;
 
     if (g_fec == NULL) {

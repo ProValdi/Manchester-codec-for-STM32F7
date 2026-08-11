@@ -29,11 +29,11 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   ALLOC
  12 .ARM.attributes 00000030  00000000  00000000  0000d060  2**0
                   CONTENTS, READONLY
- 13 .debug_info   00035ece  00000000  00000000  0000d090  2**0
+ 13 .debug_info   00035ecd  00000000  00000000  0000d090  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 14 .debug_abbrev 00006390  00000000  00000000  00042f5e  2**0
+ 14 .debug_abbrev 00006390  00000000  00000000  00042f5d  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 15 .debug_loclists 000195dd  00000000  00000000  000492ee  2**0
+ 15 .debug_loclists 000195dd  00000000  00000000  000492ed  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  16 .debug_aranges 00001850  00000000  00000000  000628d0  2**3
                   CONTENTS, READONLY, DEBUGGING, OCTETS
@@ -41,15 +41,15 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  18 .debug_macro  000054a5  00000000  00000000  0006749f  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 19 .debug_line   00033c93  00000000  00000000  0006c944  2**0
+ 19 .debug_line   00033c91  00000000  00000000  0006c944  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 20 .debug_str    000ff33b  00000000  00000000  000a05d7  2**0
+ 20 .debug_str    000ff33b  00000000  00000000  000a05d5  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 21 .comment      00000043  00000000  00000000  0019f912  2**0
+ 21 .comment      00000043  00000000  00000000  0019f910  2**0
                   CONTENTS, READONLY
- 22 .debug_frame  00004f68  00000000  00000000  0019f958  2**2
+ 22 .debug_frame  00004f68  00000000  00000000  0019f954  2**2
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 23 .debug_line_str 00000063  00000000  00000000  001a48c0  2**0
+ 23 .debug_line_str 00000063  00000000  00000000  001a48bc  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
 
 Disassembly of section .text:
@@ -1329,45 +1329,45 @@ __STATIC_INLINE void SCB_EnableICache (void)
  8000b74:	f44f 4180 	mov.w	r1, #16384	@ 0x4000
  8000b78:	483a      	ldr	r0, [pc, #232]	@ (8000c64 <main+0x608>)
  8000b7a:	f003 fea7 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET); // D1 - 1 - разрешаем работу в передаче
- 8000b7e:	2201      	movs	r2, #1
- 8000b80:	f44f 4180 	mov.w	r1, #16384	@ 0x4000
- 8000b84:	4838      	ldr	r0, [pc, #224]	@ (8000c68 <main+0x60c>)
+  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET); // D1 - 1 - запрещаем работу в приеме
+ 8000b7e:	f44f 4180 	mov.w	r1, #16384	@ 0x4000
+ 8000b82:	4839      	ldr	r0, [pc, #228]	@ (8000c68 <main+0x60c>)
+ 8000b84:	2201      	movs	r2, #1
  8000b86:	f003 fea1 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_SET); // D2 - 1 - разрешаем работу в передаче
- 8000b8a:	2201      	movs	r2, #1
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_RESET); // D2 - 0 - запрещаем работу в приеме
+ 8000b8a:	4632      	mov	r2, r6
  8000b8c:	f44f 4100 	mov.w	r1, #32768	@ 0x8000
  8000b90:	4836      	ldr	r0, [pc, #216]	@ (8000c6c <main+0x610>)
  8000b92:	f003 fe9b 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_SET); // D5 - 1
- 8000b96:	2201      	movs	r2, #1
- 8000b98:	f44f 6100 	mov.w	r1, #2048	@ 0x800
- 8000b9c:	4834      	ldr	r0, [pc, #208]	@ (8000c70 <main+0x614>)
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); // D5 - 0 - выключаем усилок гена в приеме
+ 8000b96:	4632      	mov	r2, r6
+ 8000b98:	4835      	ldr	r0, [pc, #212]	@ (8000c70 <main+0x614>)
+ 8000b9a:	f44f 6100 	mov.w	r1, #2048	@ 0x800
  8000b9e:	f003 fe95 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_SET); // D6 - 1
- 8000ba2:	4639      	mov	r1, r7
- 8000ba4:	4832      	ldr	r0, [pc, #200]	@ (8000c70 <main+0x614>)
- 8000ba6:	2201      	movs	r2, #1
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_RESET); // D6 - 0 - выключаем усилок гена в приеме
+ 8000ba2:	4632      	mov	r2, r6
+ 8000ba4:	4639      	mov	r1, r7
+ 8000ba6:	4832      	ldr	r0, [pc, #200]	@ (8000c70 <main+0x614>)
  8000ba8:	f003 fe90 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // D15 - 0
- 8000bac:	4632      	mov	r2, r6
- 8000bae:	4831      	ldr	r0, [pc, #196]	@ (8000c74 <main+0x618>)
- 8000bb0:	f44f 7180 	mov.w	r1, #256	@ 0x100
- 8000bb4:	f003 fe8a 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET); // D14 - 0
- 8000bb8:	4632      	mov	r2, r6
- 8000bba:	4639      	mov	r1, r7
- 8000bbc:	482d      	ldr	r0, [pc, #180]	@ (8000c74 <main+0x618>)
- 8000bbe:	f003 fe85 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_RESET); // A4 - 0
- 8000bc2:	4632      	mov	r2, r6
- 8000bc4:	4641      	mov	r1, r8
- 8000bc6:	4829      	ldr	r0, [pc, #164]	@ (8000c6c <main+0x610>)
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_SET); // A4 - 1
+ 8000bac:	4641      	mov	r1, r8
+ 8000bae:	2201      	movs	r2, #1
+ 8000bb0:	482e      	ldr	r0, [pc, #184]	@ (8000c6c <main+0x610>)
+ 8000bb2:	f003 fe8b 	bl	80048cc <HAL_GPIO_WritePin>
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5, GPIO_PIN_SET); // A5 - 1
+ 8000bb6:	2201      	movs	r2, #1
+ 8000bb8:	2120      	movs	r1, #32
+ 8000bba:	482c      	ldr	r0, [pc, #176]	@ (8000c6c <main+0x610>)
+ 8000bbc:	f003 fe86 	bl	80048cc <HAL_GPIO_WritePin>
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET); // D15 - 1
+ 8000bc0:	2201      	movs	r2, #1
+ 8000bc2:	f44f 7180 	mov.w	r1, #256	@ 0x100
+ 8000bc6:	482b      	ldr	r0, [pc, #172]	@ (8000c74 <main+0x618>)
  8000bc8:	f003 fe80 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5, GPIO_PIN_RESET); // A5 - 0
- 8000bcc:	4632      	mov	r2, r6
- 8000bce:	2120      	movs	r1, #32
- 8000bd0:	4826      	ldr	r0, [pc, #152]	@ (8000c6c <main+0x610>)
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET); // D14 - 1
+ 8000bcc:	2201      	movs	r2, #1
+ 8000bce:	4639      	mov	r1, r7
+ 8000bd0:	4828      	ldr	r0, [pc, #160]	@ (8000c74 <main+0x618>)
  8000bd2:	f003 fe7b 	bl	80048cc <HAL_GPIO_WritePin>
   HAL_TIM_PWM_Start_IT(&htim3, TIM_CHANNEL_1); // PA6
  8000bd6:	4631      	mov	r1, r6
@@ -7045,20 +7045,20 @@ static void consume_uart_block(const uint8_t *data, uint16_t length, bool end_of
  800334e:	2b00      	cmp	r3, #0
  8003350:	f000 8094 	beq.w	800347c <Manchester_ServiceInit+0x1b8>
  8003354:	f7fd fdec 	bl	8000f30 <man_fec_hamming74_codec>
-    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
  8003358:	4c8d      	ldr	r4, [pc, #564]	@ (8003590 <Manchester_ServiceInit+0x2cc>)
- 800335a:	2201      	movs	r2, #1
+ 800335a:	2200      	movs	r2, #0
     g_fec = config->fec_enabled ? man_fec_hamming74_codec() : man_fec_identity_codec();
  800335c:	4f8e      	ldr	r7, [pc, #568]	@ (8003598 <Manchester_ServiceInit+0x2d4>)
-    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
  800335e:	8d21      	ldrh	r1, [r4, #40]	@ 0x28
     g_fec = config->fec_enabled ? man_fec_hamming74_codec() : man_fec_identity_codec();
  8003360:	6038      	str	r0, [r7, #0]
-    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
  8003362:	6a60      	ldr	r0, [r4, #36]	@ 0x24
  8003364:	f001 fab2 	bl	80048cc <HAL_GPIO_WritePin>
-	HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_RESET);
- 8003368:	2200      	movs	r2, #0
+	HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
+ 8003368:	2201      	movs	r2, #1
  800336a:	8c21      	ldrh	r1, [r4, #32]
  800336c:	69e0      	ldr	r0, [r4, #28]
  800336e:	f001 faad 	bl	80048cc <HAL_GPIO_WritePin>
