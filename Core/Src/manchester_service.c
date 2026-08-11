@@ -472,8 +472,8 @@ bool Manchester_ServiceInit(const man_platform_t *platform, const man_runtime_co
     g_fec = config->fec_enabled ? man_fec_hamming74_codec() : man_fec_identity_codec();
 
     // Инициализация приемника СШП модема - изначально слушаем
-    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_RESET);
 	g_rx_muted = false;
 
     if (g_fec == NULL) {
@@ -809,6 +809,14 @@ static bool start_tx_frame(const man_packet_t *packet)
         return false;
     }
     __HAL_TIM_ENABLE_DMA(g_hw.htim_tx, TIM_DMA_UPDATE);
+
+    /*
+     * Теперь максимально поздно включаем RF transmit.
+     */
+    rf_enter_tx_mode();
+    /*
+     * Сразу после этого стартует Manchester.
+     */
     __HAL_TIM_ENABLE(g_hw.htim_tx);
     return true;
 }
@@ -824,11 +832,11 @@ static void ManchesterTxTask(void *argument)
         led_set(g_hw.led_tx_port, g_hw.led_tx_pin, true);
         dbg_toggle(g_hw.dbg_tx_port, g_hw.dbg_tx_pin);
 
-        // Если хотим transceiver для отладки по одному проводу, то включаем MAN_PHY_WIRED_LOOPBACK
-        if (is_rf_halfduplex()) {
-            g_rx_reset_requested = true;
-            rf_enter_tx_mode();
-        }
+//        // Если хотим transceiver для отладки по одному проводу, то включаем MAN_PHY_WIRED_LOOPBACK
+//        if (is_rf_halfduplex()) {
+//            g_rx_reset_requested = true;
+//            rf_enter_tx_mode();
+//        }
 
         /*
          * Защита от старого флага TX_DONE/TX_ERROR.
@@ -839,7 +847,7 @@ static void ManchesterTxTask(void *argument)
         	// Если хотим transceiver для отладки по одному проводу, то включаем MAN_PHY_WIRED_LOOPBACK
             if (is_rf_halfduplex()) {
                 rf_enter_rx_mode();
-                g_rx_reset_requested = true;
+//                g_rx_reset_requested = true;
             }
 
             ++g_diag.dma_overruns;

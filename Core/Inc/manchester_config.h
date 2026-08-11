@@ -15,7 +15,7 @@
 #define MAN_MAX_SINGLE_MESSAGE       4096u
 #define MAN_PREAMBLE_BYTES_DEFAULT   8u
 #define MAN_PREAMBLE_BYTES_MIN       4u
-#define MAN_PREAMBLE_BYTES_MAX       8u
+#define MAN_PREAMBLE_BYTES_MAX       128u
 #define MAN_SYNC_WORD_DEFAULT        0xD391u
 
 #define MAN_SPI_DMA_BYTES            4096u

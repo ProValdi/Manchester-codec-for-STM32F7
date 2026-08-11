@@ -32,20 +32,23 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MANCHESTER_TX_GPIO_Port GPIOF
-#define MANCHESTER_TX_Pin GPIO_PIN_13
+// Manchester RX - PE14
+#define MANCHESTER_TX_GPIO_Port GPIOB
+#define MANCHESTER_TX_Pin GPIO_PIN_11
+//#define MANCHESTER_TX_GPIO_Port GPIOF
+//#define MANCHESTER_TX_Pin GPIO_PIN_13
 
 #define RF_TRANSMIT_GPIO_Port GPIOF
-#define RF_TRANSMIT_Pin GPIO_PIN_15
-#define RF_RECEIVE_GPIO_Port GPIOE
-#define RF_RECEIVE_Pin GPIO_PIN_13
+#define RF_TRANSMIT_Pin GPIO_PIN_12
+#define RF_RECEIVE_GPIO_Port GPIOD
+#define RF_RECEIVE_Pin GPIO_PIN_15
 
-#define RF_ENABLE_LNA_GPIO_Port GPIOF
-#define RF_ENABLE_LNA_Pin GPIO_PIN_12
-#define RF_ENABLE_AMPLIFIER_GPIO_Port GPIOE
-#define RF_ENABLE_AMPLIFIER_Pin GPIO_PIN_9
-#define RF_ENABLE_RECEIVER_POWER_GPIO_Port GPIOD
-#define RF_ENABLE_RECEIVER_POWER_Pin GPIO_PIN_15
+//#define RF_ENABLE_LNA_GPIO_Port GPIOF
+//#define RF_ENABLE_LNA_Pin GPIO_PIN_12
+//#define RF_ENABLE_AMPLIFIER_GPIO_Port GPIOE
+//#define RF_ENABLE_AMPLIFIER_Pin GPIO_PIN_9
+//#define RF_ENABLE_RECEIVER_POWER_GPIO_Port GPIOD
+//#define RF_ENABLE_RECEIVER_POWER_Pin GPIO_PIN_15
 
 #define LD1_GPIO_Port GPIOB
 #define LD1_Pin GPIO_PIN_0
@@ -55,7 +58,7 @@
 #define LD3_Pin GPIO_PIN_14
 
 #define DBG_RX_GPIO_Port GPIOE
-#define DBG_RX_Pin GPIO_PIN_11
+#define DBG_RX_Pin GPIO_PIN_10
 #define DBG_TX_GPIO_Port GPIOE
 #define DBG_TX_Pin GPIO_PIN_12
 #define DBG_UART_GPIO_Port GPIOE
@@ -76,6 +79,7 @@ SPI_HandleTypeDef hspi4;
 DMA_HandleTypeDef hdma_spi4_rx;
 
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim8;
 DMA_HandleTypeDef hdma_tim1_up;
 
@@ -96,7 +100,7 @@ static const man_runtime_config_t man_cfg = {
     .transfer_mode = MAN_MODE_STREAM,      /* или MAN_MODE_SINGLE */
     .bitrate_bps = MAN_RATE_1_MBPS,
     .max_payload = 256,
-    .max_single_message = 4096,
+    .max_single_message = 512,
     .preamble_bytes = 8,
     .sync_word = 0xD391,
     .glitch_filter_samples = 1u,
@@ -104,7 +108,7 @@ static const man_runtime_config_t man_cfg = {
     .uart_explicit_block_length = 0,
 	.phy_mode = MAN_PHY_RF_HALFDUPLEX, // 	MAN_PHY_RF_HALFDUPLEX или MAN_PHY_WIRED_LOOPBACK - для отладки
     .fec_enabled = false,
-    .tx_invert = true, // здесь встроена также инверсия самого пина - если данных нет, то он HIGH
+    .tx_invert = false, // здесь встроена также инверсия самого пина - если данных нет, то он HIGH
 };
 static const man_platform_t man_hw = {
     .hspi_rx = &hspi4,
@@ -118,8 +122,8 @@ static const man_platform_t man_hw = {
     .rf_recv_pin = RF_RECEIVE_Pin,
     .rf_trans_port = RF_TRANSMIT_GPIO_Port,
     .rf_trans_pin = RF_TRANSMIT_Pin,
-    .rf_tx_settle_ms = 1,
-    .rf_rx_settle_ms = 1,
+    .rf_tx_settle_ms = 0,
+    .rf_rx_settle_ms = 0,
     .led_ok_port = LD1_GPIO_Port,
     .led_ok_pin = LD1_Pin,
     .led_tx_port = LD2_GPIO_Port,
@@ -144,6 +148,7 @@ static void MX_TIM1_Init(void);
 static void MX_TIM8_Init(void);
 static void MX_SPI4_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_TIM3_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
@@ -198,12 +203,35 @@ int main(void)
   MX_TIM8_Init();
   MX_SPI4_Init();
   MX_SPI1_Init();
+  MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+  // передача
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET); // CS SPI - не трогаем, изначально высокий уровень
-  HAL_GPIO_WritePin(RF_ENABLE_LNA_GPIO_Port, RF_ENABLE_LNA_Pin, GPIO_PIN_SET); // 10
-  HAL_GPIO_WritePin(RF_ENABLE_AMPLIFIER_GPIO_Port, RF_ENABLE_AMPLIFIER_Pin, GPIO_PIN_SET); // 12
-  HAL_GPIO_WritePin(RF_ENABLE_RECEIVER_POWER_GPIO_Port, RF_ENABLE_RECEIVER_POWER_Pin, GPIO_PIN_SET); // 9
+  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET); // D1 - 1 - разрешаем работу в передаче
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_SET); // D2 - 1 - разрешаем работу в передаче
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_SET); // D5 - 1
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_SET); // D6 - 1
+
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET); // D15 - 0
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_RESET); // D14 - 0
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_RESET); // A4 - 0
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5, GPIO_PIN_RESET); // A5 - 0
+
+
+  // прием
+//  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET); // CS SPI - не трогаем, изначально высокий уровень
+//  HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET); // D1 - 1 - запрещаем работу в приеме
+//  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_RESET); // D2 - 0 - запрещаем работу в приеме
+//  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); // D5 - 0 - выключаем усилок гена в приеме
+//  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9, GPIO_PIN_RESET); // D6 - 0 - выключаем усилок гена в приеме
+//
+//  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_SET); // A4 - 1
+//  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5, GPIO_PIN_SET); // A5 - 1
+//  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET); // D15 - 1
+//  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET); // D14 - 1
+
+  HAL_TIM_PWM_Start_IT(&htim3, TIM_CHANNEL_1); // PA6
 
   HAL_Delay(100);
 
@@ -459,6 +487,65 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 0;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 120;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 60;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+  HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
   * @brief TIM8 Initialization Function
   * @param None
   * @retval None
@@ -613,28 +700,29 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LD1_Pin|LD3_Pin|LD2_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5|GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, LNA_Pin|Manchester_TX_Pin|rf_recv_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOB, LD1_Pin|GPIO_PIN_11|LD3_Pin|LD2_Pin
+                          |GPIO_PIN_8|GPIO_PIN_9, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, EnableAmplifier_Pin|DBG_RX_Pin|DBG_TX_Pin|rf_transmit_Pin
-                          |DBG_UART_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOE, EnableAmplifier_Pin|GPIO_PIN_10|GPIO_PIN_11|DBG_TX_Pin
+                          |rf_transmit_Pin|DBG_UART_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(ReceiverPower_GPIO_Port, ReceiverPower_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOG, ERR_Pin|USB_PowerSwitchOn_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOG, ERR_Pin|USB_PowerSwitchOn_Pin|GPIO_PIN_9|GPIO_PIN_14, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : USER_Btn_Pin */
   GPIO_InitStruct.Pin = USER_Btn_Pin;
@@ -642,36 +730,39 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USER_Btn_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LD1_Pin LD3_Pin LD2_Pin */
-  GPIO_InitStruct.Pin = LD1_Pin|LD3_Pin|LD2_Pin;
+  /*Configure GPIO pins : PF5 PF10 PF12 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_10|GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LD1_Pin PB11 LD3_Pin LD2_Pin
+                           PB8 PB9 */
+  GPIO_InitStruct.Pin = LD1_Pin|GPIO_PIN_11|LD3_Pin|LD2_Pin
+                          |GPIO_PIN_8|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LNA_Pin */
-  GPIO_InitStruct.Pin = LNA_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  /*Configure GPIO pin : PF13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LNA_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : Manchester_TX_Pin */
-  GPIO_InitStruct.Pin = Manchester_TX_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  HAL_GPIO_Init(Manchester_TX_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : rf_recv_Pin */
-  GPIO_InitStruct.Pin = rf_recv_Pin;
+  /*Configure GPIO pin : PF15 */
+  GPIO_InitStruct.Pin = GPIO_PIN_15;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-  HAL_GPIO_Init(rf_recv_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : EnableAmplifier_Pin DBG_RX_Pin DBG_TX_Pin DBG_UART_Pin */
-  GPIO_InitStruct.Pin = EnableAmplifier_Pin|DBG_RX_Pin|DBG_TX_Pin|DBG_UART_Pin;
+  /*Configure GPIO pins : EnableAmplifier_Pin PE10 PE11 DBG_TX_Pin
+                           DBG_UART_Pin */
+  GPIO_InitStruct.Pin = EnableAmplifier_Pin|GPIO_PIN_10|GPIO_PIN_11|DBG_TX_Pin
+                          |DBG_UART_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -691,8 +782,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(ReceiverPower_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : ERR_Pin USB_PowerSwitchOn_Pin */
-  GPIO_InitStruct.Pin = ERR_Pin|USB_PowerSwitchOn_Pin;
+  /*Configure GPIO pins : ERR_Pin USB_PowerSwitchOn_Pin PG9 PG14 */
+  GPIO_InitStruct.Pin = ERR_Pin|USB_PowerSwitchOn_Pin|GPIO_PIN_9|GPIO_PIN_14;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -703,6 +794,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USB_OverCurrent_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PD5 PD6 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */

@@ -65,16 +65,8 @@ void Error_Handler(void);
 #define MCO_GPIO_Port GPIOH
 #define LD1_Pin GPIO_PIN_0
 #define LD1_GPIO_Port GPIOB
-#define LNA_Pin GPIO_PIN_12
-#define LNA_GPIO_Port GPIOF
-#define Manchester_TX_Pin GPIO_PIN_13
-#define Manchester_TX_GPIO_Port GPIOF
-#define rf_recv_Pin GPIO_PIN_15
-#define rf_recv_GPIO_Port GPIOF
 #define EnableAmplifier_Pin GPIO_PIN_9
 #define EnableAmplifier_GPIO_Port GPIOE
-#define DBG_RX_Pin GPIO_PIN_11
-#define DBG_RX_GPIO_Port GPIOE
 #define DBG_TX_Pin GPIO_PIN_12
 #define DBG_TX_GPIO_Port GPIOE
 #define rf_transmit_Pin GPIO_PIN_13
