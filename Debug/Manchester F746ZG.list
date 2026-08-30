@@ -29,11 +29,11 @@ Idx Name          Size      VMA       LMA       File off  Algn
                   ALLOC
  12 .ARM.attributes 00000030  00000000  00000000  0000d060  2**0
                   CONTENTS, READONLY
- 13 .debug_info   00035ecd  00000000  00000000  0000d090  2**0
+ 13 .debug_info   00035ecf  00000000  00000000  0000d090  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 14 .debug_abbrev 00006390  00000000  00000000  00042f5d  2**0
+ 14 .debug_abbrev 00006390  00000000  00000000  00042f5f  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
- 15 .debug_loclists 000195dd  00000000  00000000  000492ed  2**0
+ 15 .debug_loclists 000195dd  00000000  00000000  000492ef  2**0
                   CONTENTS, READONLY, DEBUGGING, OCTETS
  16 .debug_aranges 00001850  00000000  00000000  000628d0  2**3
                   CONTENTS, READONLY, DEBUGGING, OCTETS
@@ -1349,13 +1349,13 @@ __STATIC_INLINE void SCB_EnableICache (void)
  8000ba4:	4639      	mov	r1, r7
  8000ba6:	4832      	ldr	r0, [pc, #200]	@ (8000c70 <main+0x614>)
  8000ba8:	f003 fe90 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_SET); // A4 - 1
- 8000bac:	4641      	mov	r1, r8
- 8000bae:	2201      	movs	r2, #1
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_RESET); // A4 - 1
+ 8000bac:	4632      	mov	r2, r6
+ 8000bae:	4641      	mov	r1, r8
  8000bb0:	482e      	ldr	r0, [pc, #184]	@ (8000c6c <main+0x610>)
  8000bb2:	f003 fe8b 	bl	80048cc <HAL_GPIO_WritePin>
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5, GPIO_PIN_SET); // A5 - 1
- 8000bb6:	2201      	movs	r2, #1
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5, GPIO_PIN_RESET); // A5 - 1
+ 8000bb6:	4632      	mov	r2, r6
  8000bb8:	2120      	movs	r1, #32
  8000bba:	482c      	ldr	r0, [pc, #176]	@ (8000c6c <main+0x610>)
  8000bbc:	f003 fe86 	bl	80048cc <HAL_GPIO_WritePin>
