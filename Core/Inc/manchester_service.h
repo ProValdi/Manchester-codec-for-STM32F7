@@ -9,12 +9,11 @@
 #include "manchester_types.h"
 
 typedef struct {
-    SPI_HandleTypeDef *hspi_rx;       /* expected: &hspi4 */
-    TIM_HandleTypeDef *htim_tx;       /* expected: &htim1 */
-    UART_HandleTypeDef *huart;        /* expected: &huart3 */
+    TIM_HandleTypeDef *htim_tx;
+    UART_HandleTypeDef *huart;
 
-    TIM_HandleTypeDef *htim_rx_clk;   /* Continuous SPI SCLK: expected &htim8 */
-    uint32_t tim_rx_clk_channel;      /* TIM_CHANNEL_1 ... TIM_CHANNEL_4: expected TIM_CHANNEL_1 */
+    TIM_HandleTypeDef *htim_rx_ic;
+    uint32_t tim_rx_ic_channel;
 
     GPIO_TypeDef *tx_port;
     uint16_t tx_pin;
@@ -50,15 +49,12 @@ bool Manchester_ServiceInit(const man_platform_t *platform, const man_runtime_co
 bool Manchester_CreateRtosObjects(void);
 
 /* HAL callback dispatchers. Call these from the matching USER CODE callback functions. */
-void Manchester_OnSpiTxRxHalfComplete(SPI_HandleTypeDef *hspi);
-void Manchester_OnSpiTxRxComplete(SPI_HandleTypeDef *hspi);
-void Manchester_OnSpiError(SPI_HandleTypeDef *hspi);
 void Manchester_OnUartRxEvent(UART_HandleTypeDef *huart, uint16_t position);
 void Manchester_OnUartTxComplete(UART_HandleTypeDef *huart);
 void Manchester_OnUartError(UART_HandleTypeDef *huart);
 
 const man_diagnostics_t *Manchester_GetDiagnostics(void);
-uint32_t Manchester_GetSpiSampleRateHz(void);
+uint32_t Manchester_GetRxTimerClockHz(void);
 
 /* Weak no-op test hook. Override in user code to inject a bit error before line encoding. */
 void Manchester_TestHookMutateWireBits(uint8_t *wire_bits, size_t bit_count);

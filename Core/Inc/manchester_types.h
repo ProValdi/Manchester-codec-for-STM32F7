@@ -17,17 +17,26 @@ typedef enum {
 } man_transfer_mode_t;
 
 typedef enum {
-    MAN_RATE_1_MBPS = 1000000u,
-    MAN_RATE_2_MBPS = 2000000u,
-    MAN_RATE_3_MBPS = 3000000u,
-    MAN_RATE_4_MBPS = 4000000u
+    MAN_RATE_1_MBPS =  1000000u,
+    MAN_RATE_2_MBPS =  2000000u,
+    MAN_RATE_3_MBPS =  3000000u,
+    MAN_RATE_4_MBPS =  4000000u,
+	MAN_RATE_6_MBPS =  6000000u,
+	MAN_RATE_9_MBPS =  9000000u,
+	MAN_RATE_12_MBPS = 12000000u,
+	MAN_RATE_18_MBPS = 18000000u  // experimental
 } man_bitrate_t;
 
 enum {
     MAN_FLAG_STREAM = 1u << 0,
     MAN_FLAG_END = 1u << 1,
     MAN_FLAG_FEC = 1u << 2,
-    MAN_FLAG_RESET = 1u << 3
+    MAN_FLAG_RESET = 1u << 3,
+
+    /*
+     * Payload содержит наш файловый radio transport.
+     */
+    MAN_FLAG_FILE = 1u << 4
 };
 
 typedef enum {
@@ -74,11 +83,5 @@ typedef struct {
     volatile uint32_t fec_errors;
     volatile uint32_t dropped_blocks;
 } man_diagnostics_t;
-
-static inline bool man_bitrate_is_valid(uint32_t value)
-{
-    return value == MAN_RATE_1_MBPS || value == MAN_RATE_2_MBPS ||
-           value == MAN_RATE_3_MBPS || value == MAN_RATE_4_MBPS;
-}
 
 #endif

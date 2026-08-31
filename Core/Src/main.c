@@ -75,13 +75,12 @@
 /* Private variables ---------------------------------------------------------*/
 
 SPI_HandleTypeDef hspi1;
-SPI_HandleTypeDef hspi4;
-DMA_HandleTypeDef hdma_spi4_rx;
 
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim8;
 DMA_HandleTypeDef hdma_tim1_up;
+DMA_HandleTypeDef hdma_tim8_ch2;
 
 UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_usart3_rx;
@@ -95,27 +94,44 @@ const osThreadAttr_t defaultTask_attributes = {
   .priority = (osPriority_t) osPriorityLow,
 };
 /* USER CODE BEGIN PV */
+//static const man_runtime_config_t man_cfg = {
+//    .encoding = MAN_ENCODING_DIFFERENTIAL, /* или MAN_ENCODING_STANDARD MAN_ENCODING_DIFFERENTIAL */
+//    .transfer_mode = MAN_MODE_STREAM,      /* или MAN_MODE_SINGLE */
+//    .bitrate_bps = MAN_RATE_1_MBPS,
+//    .max_payload = 256,
+//    .max_single_message = 512,
+//    .preamble_bytes = 8,
+//    .sync_word = 0xD391,
+//    .glitch_filter_samples = 1u,
+//    .uart_idle_flush_ms = 10,
+//    .uart_explicit_block_length = 0,
+//	.phy_mode = MAN_PHY_RF_HALFDUPLEX, // 	MAN_PHY_RF_HALFDUPLEX или MAN_PHY_WIRED_LOOPBACK - для отладки
+//    .fec_enabled = false,
+//    .tx_invert = false, // здесь встроена также инверсия самого пина - если данных нет, то он HIGH
+//};
+
 static const man_runtime_config_t man_cfg = {
     .encoding = MAN_ENCODING_DIFFERENTIAL, /* или MAN_ENCODING_STANDARD MAN_ENCODING_DIFFERENTIAL */
     .transfer_mode = MAN_MODE_STREAM,      /* или MAN_MODE_SINGLE */
     .bitrate_bps = MAN_RATE_1_MBPS,
-    .max_payload = 256,
+    .max_payload = 220,
     .max_single_message = 512,
-    .preamble_bytes = 8,
+    .preamble_bytes = 32,
     .sync_word = 0xD391,
     .glitch_filter_samples = 1u,
     .uart_idle_flush_ms = 10,
     .uart_explicit_block_length = 0,
 	.phy_mode = MAN_PHY_RF_HALFDUPLEX, // 	MAN_PHY_RF_HALFDUPLEX или MAN_PHY_WIRED_LOOPBACK - для отладки
     .fec_enabled = false,
-    .tx_invert = false, // здесь встроена также инверсия самого пина - если данных нет, то он HIGH
+    .tx_invert = false, // здесь встроена также инверсия самого пина - если данных нет, то он HIGH // true
 };
+
 static const man_platform_t man_hw = {
-    .hspi_rx = &hspi4,
-    .htim_tx = &htim1,
-    .huart = &huart3,
-    .htim_rx_clk = &htim8,
-    .tim_rx_clk_channel = TIM_CHANNEL_2,
+	.htim_tx = &htim1,
+	.huart = &huart3,
+
+	.htim_rx_ic = &htim8,
+	.tim_rx_ic_channel = TIM_CHANNEL_2,
     .tx_port = MANCHESTER_TX_GPIO_Port,
     .tx_pin = MANCHESTER_TX_Pin,
     .rf_recv_port = RF_RECEIVE_GPIO_Port,
@@ -137,6 +153,7 @@ static const man_platform_t man_hw = {
     .dbg_uart_port = DBG_UART_GPIO_Port,
     .dbg_uart_pin = DBG_UART_Pin,
 };
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -146,7 +163,6 @@ static void MX_DMA_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM8_Init(void);
-static void MX_SPI4_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM3_Init(void);
 void StartDefaultTask(void *argument);
@@ -201,7 +217,6 @@ int main(void)
   MX_USART3_UART_Init();
   MX_TIM1_Init();
   MX_TIM8_Init();
-  MX_SPI4_Init();
   MX_SPI1_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
@@ -401,45 +416,6 @@ static void MX_SPI1_Init(void)
 }
 
 /**
-  * @brief SPI4 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SPI4_Init(void)
-{
-
-  /* USER CODE BEGIN SPI4_Init 0 */
-
-  /* USER CODE END SPI4_Init 0 */
-
-  /* USER CODE BEGIN SPI4_Init 1 */
-
-  /* USER CODE END SPI4_Init 1 */
-  /* SPI4 parameter configuration*/
-  hspi4.Instance = SPI4;
-  hspi4.Init.Mode = SPI_MODE_SLAVE;
-  hspi4.Init.Direction = SPI_DIRECTION_2LINES_RXONLY;
-  hspi4.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi4.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi4.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi4.Init.NSS = SPI_NSS_SOFT;
-  hspi4.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi4.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi4.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi4.Init.CRCPolynomial = 7;
-  hspi4.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
-  hspi4.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
-  if (HAL_SPI_Init(&hspi4) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI4_Init 2 */
-
-  /* USER CODE END SPI4_Init 2 */
-
-}
-
-/**
   * @brief TIM1 Initialization Function
   * @param None
   * @retval None
@@ -559,8 +535,7 @@ static void MX_TIM8_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_OC_InitTypeDef sConfigOC = {0};
-  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+  TIM_IC_InitTypeDef sConfigIC = {0};
 
   /* USER CODE BEGIN TIM8_Init 1 */
 
@@ -568,9 +543,9 @@ static void MX_TIM8_Init(void)
   htim8.Instance = TIM8;
   htim8.Init.Prescaler = 0;
   htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim8.Init.Period = 15;
+  htim8.Init.Period = 65535;
   htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim8.Init.RepetitionCounter = 8;
+  htim8.Init.RepetitionCounter = 0;
   htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim8) != HAL_OK)
   {
@@ -581,7 +556,7 @@ static void MX_TIM8_Init(void)
   {
     Error_Handler();
   }
-  if (HAL_TIM_PWM_Init(&htim8) != HAL_OK)
+  if (HAL_TIM_IC_Init(&htim8) != HAL_OK)
   {
     Error_Handler();
   }
@@ -592,36 +567,17 @@ static void MX_TIM8_Init(void)
   {
     Error_Handler();
   }
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-  if (HAL_TIM_PWM_ConfigChannel(&htim8, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
-  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
-  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
-  sBreakDeadTimeConfig.DeadTime = 0;
-  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
-  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
-  sBreakDeadTimeConfig.BreakFilter = 0;
-  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
-  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
-  sBreakDeadTimeConfig.Break2Filter = 0;
-  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
-  if (HAL_TIMEx_ConfigBreakDeadTime(&htim8, &sBreakDeadTimeConfig) != HAL_OK)
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim8, &sConfigIC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
   /* USER CODE BEGIN TIM8_Init 2 */
 
   /* USER CODE END TIM8_Init 2 */
-  HAL_TIM_MspPostInit(&htim8);
 
 }
 
@@ -677,9 +633,9 @@ static void MX_DMA_Init(void)
   /* DMA1_Stream3_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 7, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
-  /* DMA2_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+  /* DMA2_Stream3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
   /* DMA2_Stream5_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream5_IRQn, 6, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream5_IRQn);
@@ -698,12 +654,12 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
 
@@ -774,6 +730,14 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(rf_transmit_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PE14 */
+  GPIO_InitStruct.Pin = GPIO_PIN_14;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF5_SPI4;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
   /*Configure GPIO pin : ReceiverPower_Pin */
   GPIO_InitStruct.Pin = ReceiverPower_Pin;

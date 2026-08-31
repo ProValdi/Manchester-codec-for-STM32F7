@@ -23,9 +23,9 @@
 /* USER CODE BEGIN Includes */
 
 /* USER CODE END Includes */
-extern DMA_HandleTypeDef hdma_spi4_rx;
-
 extern DMA_HandleTypeDef hdma_tim1_up;
+
+extern DMA_HandleTypeDef hdma_tim8_ch2;
 
 extern DMA_HandleTypeDef hdma_usart3_rx;
 
@@ -66,7 +66,7 @@ extern DMA_HandleTypeDef hdma_usart3_tx;
 /* USER CODE END 0 */
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
-                                        /**
+                    /**
   * Initializes the Global MSP.
   */
 void HAL_MspInit(void)
@@ -120,49 +120,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
   /* USER CODE BEGIN SPI1_MspInit 1 */
 
   /* USER CODE END SPI1_MspInit 1 */
-  }
-  else if(hspi->Instance==SPI4)
-  {
-  /* USER CODE BEGIN SPI4_MspInit 0 */
 
-  /* USER CODE END SPI4_MspInit 0 */
-    /* Peripheral clock enable */
-    __HAL_RCC_SPI4_CLK_ENABLE();
-
-    __HAL_RCC_GPIOE_CLK_ENABLE();
-    /**SPI4 GPIO Configuration
-    PE2     ------> SPI4_SCK
-    PE14     ------> SPI4_MOSI
-    */
-    GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_14;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF5_SPI4;
-    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-
-    /* SPI4 DMA Init */
-    /* SPI4_RX Init */
-    hdma_spi4_rx.Instance = DMA2_Stream0;
-    hdma_spi4_rx.Init.Channel = DMA_CHANNEL_4;
-    hdma_spi4_rx.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma_spi4_rx.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_spi4_rx.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_spi4_rx.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
-    hdma_spi4_rx.Init.MemDataAlignment = DMA_MDATAALIGN_BYTE;
-    hdma_spi4_rx.Init.Mode = DMA_CIRCULAR;
-    hdma_spi4_rx.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-    hdma_spi4_rx.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
-    if (HAL_DMA_Init(&hdma_spi4_rx) != HAL_OK)
-    {
-      Error_Handler();
-    }
-
-    __HAL_LINKDMA(hspi,hdmarx,hdma_spi4_rx);
-
-  /* USER CODE BEGIN SPI4_MspInit 1 */
-
-  /* USER CODE END SPI4_MspInit 1 */
   }
 
 }
@@ -193,26 +151,6 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* hspi)
 
   /* USER CODE END SPI1_MspDeInit 1 */
   }
-  else if(hspi->Instance==SPI4)
-  {
-  /* USER CODE BEGIN SPI4_MspDeInit 0 */
-
-  /* USER CODE END SPI4_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_SPI4_CLK_DISABLE();
-
-    /**SPI4 GPIO Configuration
-    PE2     ------> SPI4_SCK
-    PE14     ------> SPI4_MOSI
-    */
-    HAL_GPIO_DeInit(GPIOE, GPIO_PIN_2|GPIO_PIN_14);
-
-    /* SPI4 DMA DeInit */
-    HAL_DMA_DeInit(hspi->hdmarx);
-  /* USER CODE BEGIN SPI4_MspDeInit 1 */
-
-  /* USER CODE END SPI4_MspDeInit 1 */
-  }
 
 }
 
@@ -224,6 +162,7 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* hspi)
 */
 void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   if(htim_base->Instance==TIM1)
   {
   /* USER CODE BEGIN TIM1_MspInit 0 */
@@ -273,6 +212,37 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* htim_base)
   /* USER CODE END TIM8_MspInit 0 */
     /* Peripheral clock enable */
     __HAL_RCC_TIM8_CLK_ENABLE();
+
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    /**TIM8 GPIO Configuration
+    PC7     ------> TIM8_CH2
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_7;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF3_TIM8;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    /* TIM8 DMA Init */
+    /* TIM8_CH2 Init */
+    hdma_tim8_ch2.Instance = DMA2_Stream3;
+    hdma_tim8_ch2.Init.Channel = DMA_CHANNEL_7;
+    hdma_tim8_ch2.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_tim8_ch2.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_tim8_ch2.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_tim8_ch2.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
+    hdma_tim8_ch2.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
+    hdma_tim8_ch2.Init.Mode = DMA_CIRCULAR;
+    hdma_tim8_ch2.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_tim8_ch2.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_tim8_ch2) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(htim_base,hdma[TIM_DMA_ID_CC2],hdma_tim8_ch2);
+
   /* USER CODE BEGIN TIM8_MspInit 1 */
 
   /* USER CODE END TIM8_MspInit 1 */
@@ -288,6 +258,7 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
   /* USER CODE BEGIN TIM3_MspPostInit 0 */
 
   /* USER CODE END TIM3_MspPostInit 0 */
+
     __HAL_RCC_GPIOA_CLK_ENABLE();
     /**TIM3 GPIO Configuration
     PA6     ------> TIM3_CH1
@@ -302,27 +273,6 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* htim)
   /* USER CODE BEGIN TIM3_MspPostInit 1 */
 
   /* USER CODE END TIM3_MspPostInit 1 */
-  }
-  else if(htim->Instance==TIM8)
-  {
-  /* USER CODE BEGIN TIM8_MspPostInit 0 */
-
-  /* USER CODE END TIM8_MspPostInit 0 */
-
-    __HAL_RCC_GPIOC_CLK_ENABLE();
-    /**TIM8 GPIO Configuration
-    PC7     ------> TIM8_CH2
-    */
-    GPIO_InitStruct.Pin = GPIO_PIN_7;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Alternate = GPIO_AF3_TIM8;
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /* USER CODE BEGIN TIM8_MspPostInit 1 */
-
-  /* USER CODE END TIM8_MspPostInit 1 */
   }
 
 }
@@ -366,6 +316,14 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* htim_base)
   /* USER CODE END TIM8_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_TIM8_CLK_DISABLE();
+
+    /**TIM8 GPIO Configuration
+    PC7     ------> TIM8_CH2
+    */
+    HAL_GPIO_DeInit(GPIOC, GPIO_PIN_7);
+
+    /* TIM8 DMA DeInit */
+    HAL_DMA_DeInit(htim_base->hdma[TIM_DMA_ID_CC2]);
   /* USER CODE BEGIN TIM8_MspDeInit 1 */
 
   /* USER CODE END TIM8_MspDeInit 1 */

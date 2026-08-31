@@ -339,8 +339,7 @@ static void observe_edge(man_rx_decoder_t *d, uint64_t edge_sample)
 	        delta = UINT16_MAX;
 	    }
 
-	    g_dbg_edge_deltas[g_dbg_edge_delta_count++] =
-	        (uint16_t)delta;
+	    g_dbg_edge_deltas[g_dbg_edge_delta_count++] = (uint16_t)delta;
 	}
 
 	if (g_dbg_previous_edge_valid) {
@@ -391,6 +390,84 @@ static void observe_edge(man_rx_decoder_t *d, uint64_t edge_sample)
         d->grid_origin_q16 += correction;
         d->next_chip_center_q16 += correction;
     }
+}
+
+void man_rx_decoder_feed_edge(man_rx_decoder_t *d, uint64_t edge_tick)
+{
+    if (d == NULL) {
+        return;
+    }
+
+    /*
+     * Первый фронт нового timeline.
+     *
+     * Input Capture BOTHEDGE сообщает момент фронта,
+     * но не сообщает rising это или falling.
+     *
+     * Для Differential Manchester это не имеет значения:
+     * глобальная инверсия всех уровней не изменяет decode.
+     */
+    if (!d->timeline_valid) {
+
+        d->timeline_valid = true;
+        d->timeline_position = edge_tick;
+
+        /*
+         * Условно считаем уровень ПОСЛЕ первого фронта HIGH.
+         * Для Differential Manchester можно было выбрать и 0.
+         */
+        d->timeline_level = 1u;
+
+        observe_edge(d, edge_tick);
+
+        return;
+    }
+
+    /*
+     * Дубликат/ошибка frontend.
+     * Нормальный edge timeline обязан быть монотонным.
+     */
+    if (edge_tick <= d->timeline_position) {
+        return;
+    }
+
+    /*
+     * Сначала выдаём chip centers между предыдущим
+     * и текущим фронтом на старом уровне.
+     */
+    emit_until(d, edge_tick, d->timeline_level);
+
+    /*
+     * PLL получает точное положение нового фронта.
+     */
+    observe_edge(d, edge_tick);
+
+    /*
+     * После любого BOTHEDGE capture уровень меняется.
+     */
+    d->timeline_position = edge_tick;
+    d->timeline_level ^= 1u;
+}
+
+
+void man_rx_decoder_advance_time(man_rx_decoder_t *d, uint64_t now_tick)
+{
+    if (d == NULL ||
+        !d->timeline_valid ||
+        now_tick <= d->timeline_position) {
+
+        return;
+    }
+
+    /*
+     * ВАЖНО:
+     * timeline_position здесь НЕ обновляем.
+     *
+     * Это timestamp последнего реального фронта,
+     * и emit_until() использует его для
+     * MAN_MAX_NO_EDGE_CHIPS timeout.
+     */
+    emit_until(d, now_tick, d->timeline_level);
 }
 
 static uint8_t first_transition_offset(uint8_t mask)
@@ -479,7 +556,7 @@ bool man_rx_decoder_init(man_rx_decoder_t *d,
                          man_rx_frame_callback_t callback,
                          void *callback_user)
 {
-    if (d == NULL || cfg == NULL || fec == NULL || !man_bitrate_is_valid(cfg->bitrate_bps) ||
+    if (d == NULL || cfg == NULL || fec == NULL ||
         sample_rate_hz < cfg->bitrate_bps * 4u || cfg->preamble_bytes < MAN_PREAMBLE_BYTES_MIN ||
         cfg->preamble_bytes > MAN_PREAMBLE_BYTES_MAX || cfg->glitch_filter_samples > MAN_GLITCH_FILTER_MAX_SAMPLES ||
         cfg->max_payload == 0u || cfg->max_payload > MAN_MAX_PAYLOAD || fec->context_size > MAN_FEC_CONTEXT_BYTES) {

@@ -79,4 +79,27 @@ bool man_rx_decoder_init(man_rx_decoder_t *decoder,
 void man_rx_decoder_reset(man_rx_decoder_t *decoder);
 void man_rx_decoder_feed_packed(man_rx_decoder_t *decoder, const uint8_t *samples, size_t byte_count);
 
+/*
+ * Edge-based frontend.
+ *
+ * edge_tick — монотонный timestamp в тактах таймера RX.
+ *
+ * Для Differential Manchester абсолютная полярность линии
+ * не важна: каждый новый фронт просто инвертирует текущий уровень.
+ */
+void man_rx_decoder_feed_edge(
+    man_rx_decoder_t *decoder,
+    uint64_t edge_tick
+);
+
+/*
+ * Продвинуть время без нового фронта.
+ * Нужно, чтобы после последнего фронта короткого пакета
+ * DSP смог выдать оставшиеся chip'ы и завершить frame.
+ */
+void man_rx_decoder_advance_time(
+    man_rx_decoder_t *decoder,
+    uint64_t now_tick
+);
+
 #endif

@@ -15,36 +15,33 @@
 #define MAN_MAX_SINGLE_MESSAGE       4096u
 #define MAN_PREAMBLE_BYTES_DEFAULT   8u
 #define MAN_PREAMBLE_BYTES_MIN       4u
-#define MAN_PREAMBLE_BYTES_MAX       128u
+#define MAN_PREAMBLE_BYTES_MAX       256u
 #define MAN_SYNC_WORD_DEFAULT        0xD391u
 
-#define MAN_SPI_DMA_BYTES            4096u
-#define MAN_SPI_DMA_HALF_BYTES       (MAN_SPI_DMA_BYTES / 2u)
-#define MAN_UART_RX_DMA_BYTES        2048u
+/* Parallel raw edge capture through TIM input capture + DMA. */
+#define MAN_TIM_IC_RAW_CAPTURE_ENABLED  1u
+#define MAN_TIM_IC_DMA_EVENTS           4096u
+#define MAN_TIM_IC_DMA_HALF_EVENTS      (MAN_TIM_IC_DMA_EVENTS / 2u)
+
+#define MAN_UART_RX_DMA_BYTES        2048u // 8192u
 #define MAN_UART_TX_STAGE_BYTES      512u
 #define MAN_TX_MAX_WIRE_BITS         4096u
 #define MAN_TX_MAX_CHIPS             (MAN_TX_MAX_WIRE_BITS * 2u)
 
 #define MAN_PACKET_POOL_COUNT        16u
 #define MAN_TX_QUEUE_DEPTH           8u
-#define MAN_RX_QUEUE_DEPTH           8u
+#define MAN_RX_QUEUE_DEPTH           32u
 #define MAN_UART_OUT_QUEUE_DEPTH     8u
 #define MAN_UART_ISR_EVENT_COUNT     32u
 
 #define MAN_GLITCH_FILTER_MAX_SAMPLES 4u
 #define MAN_FEC_CONTEXT_BYTES         64u
 
-/*
- * Минимальное число SPI-отсчётов на один Manchester-chip.
- *
- * Один информационный бит содержит два chip.
- */
-#define MAN_RX_MIN_SAMPLES_PER_CHIP  6u
-
-/*
- * Максимальная допустимая частота SPI1 slave.
- */
-#define MAN_RX_SAMPLE_CLOCK_MAX_HZ   54000000u
+#define MAN_FILE_TX_QUEUE_DEPTH       2u
+#define MAN_FILE_ACK_QUEUE_DEPTH      8u
+#define MAN_FILE_ACK_TIMEOUT_MS       100u
+#define MAN_FILE_MAX_RETRIES          15u
+#define MAN_FILE_ACK_TURNAROUND_MS    3u
 
 /* Default DMA placement: dedicated linker section. */
 #if defined(__GNUC__)
