@@ -92,6 +92,38 @@ volatile uint32_t g_dbg_timer_ticks;
 static volatile bool g_rx_muted = false;
 static volatile bool g_rx_reset_requested = false;
 
+static void rf_apply_rx_gpio(void)
+{
+    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9,  GPIO_PIN_RESET);
+
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5,  GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9,  GPIO_PIN_SET);
+
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
+}
+
+static void rf_apply_tx_gpio(void)
+{
+    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9,  GPIO_PIN_SET);
+
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5,  GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9,  GPIO_PIN_RESET);
+
+    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_RESET);
+}
+
 static void tx_set_idle_level(void)
 {
     const GPIO_PinState idle =
@@ -114,8 +146,7 @@ static void rf_enter_tx_mode(void)
     g_rx_muted = true;
     g_rx_reset_requested = true;
 
-    HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
+    rf_apply_tx_gpio();
 
     if (g_hw.rf_tx_settle_ms != 0u) {
         osDelay(g_hw.rf_tx_settle_ms);
@@ -128,8 +159,7 @@ static void rf_enter_rx_mode(void)
         return;
     }
 
-    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
+    rf_apply_rx_gpio();
 
     if (g_hw.rf_rx_settle_ms != 0u) {
         osDelay(g_hw.rf_rx_settle_ms);
@@ -472,8 +502,7 @@ bool Manchester_ServiceInit(const man_platform_t *platform, const man_runtime_co
     g_fec = config->fec_enabled ? man_fec_hamming74_codec() : man_fec_identity_codec();
 
     // Инициализация приемника СШП модема - изначально слушаем
-    HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
-	HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
+    rf_apply_rx_gpio();
 	g_rx_muted = false;
 
     if (g_fec == NULL) {
