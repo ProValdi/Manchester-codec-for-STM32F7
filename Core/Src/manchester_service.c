@@ -262,15 +262,16 @@ static volatile bool g_rx_reset_requested = false;
 
 static void rf_apply_rx_gpio(void)
 {
-    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9,  GPIO_PIN_RESET);
+	// прием
+    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET);   // D1 - 1
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_RESET); // D2 - 0
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); // D5 - 0
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9,  GPIO_PIN_RESET); // D6 - 0
 
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5,  GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9,  GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_SET); // D15 - 1
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5,  GPIO_PIN_SET); // D14 - 1
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_SET); // A4 - 1
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9,  GPIO_PIN_SET); // A5 - 1
 
     HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
@@ -278,15 +279,16 @@ static void rf_apply_rx_gpio(void)
 
 static void rf_apply_tx_gpio(void)
 {
-    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_SET);
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9,  GPIO_PIN_SET);
+	// передача
+    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET); // D1 - 1
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_SET); // D2 - 1
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_SET); // D5 - 1
+    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9,  GPIO_PIN_SET); // D6 - 1
 
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5,  GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9,  GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_RESET); // D15 - 0
+    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5,  GPIO_PIN_RESET); // D14 - 0
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_RESET); // A4 - 0
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9,  GPIO_PIN_RESET); // A5 - 0
 
     HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_RESET);

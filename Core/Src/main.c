@@ -33,10 +33,10 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 // Manchester RX - PE14
-#define MANCHESTER_TX_GPIO_Port GPIOB
-#define MANCHESTER_TX_Pin GPIO_PIN_11
-//#define MANCHESTER_TX_GPIO_Port GPIOF
-//#define MANCHESTER_TX_Pin GPIO_PIN_13
+//#define MANCHESTER_TX_GPIO_Port GPIOB
+//#define MANCHESTER_TX_Pin GPIO_PIN_11
+#define MANCHESTER_TX_GPIO_Port GPIOF
+#define MANCHESTER_TX_Pin GPIO_PIN_13
 
 #define RF_TRANSMIT_GPIO_Port GPIOF
 #define RF_TRANSMIT_Pin GPIO_PIN_12
@@ -116,7 +116,7 @@ static const man_runtime_config_t man_cfg = {
     .bitrate_bps = MAN_RATE_1_MBPS,
     .max_payload = 220,
     .max_single_message = 512,
-    .preamble_bytes = 32,
+    .preamble_bytes = 16,
     .sync_word = 0xD391,
     .glitch_filter_samples = 1u,
     .uart_idle_flush_ms = 10,
@@ -664,7 +664,8 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOG_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5|GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_15, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5|GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_13
+                          |GPIO_PIN_15, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LD1_Pin|GPIO_PIN_11|LD3_Pin|LD2_Pin
@@ -686,8 +687,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(USER_Btn_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PF5 PF10 PF12 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_10|GPIO_PIN_12;
+  /*Configure GPIO pins : PF5 PF10 PF12 PF13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_10|GPIO_PIN_12|GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -701,12 +702,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : PF13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PF15 */
   GPIO_InitStruct.Pin = GPIO_PIN_15;
