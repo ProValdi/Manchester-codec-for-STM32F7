@@ -115,6 +115,34 @@ char g_dbg_file_name[64];
 // Новый режим пакетной передачи END
 
 
+typedef enum {
+    RX_ACQ_SEARCH = 0,
+    RX_ACQ_ACTIVE = 1
+} rx_acq_state_t;
+
+typedef struct {
+    rx_acq_state_t state;
+
+    uint64_t candidate_edges[MAN_RX_ACQ_BUFFER_EDGES];
+    uint32_t candidate_count;
+    uint32_t valid_intervals;
+
+    uint32_t active_edges;
+    uint32_t phase_errors_at_lock;
+    uint32_t good_frames_at_lock;
+} rx_acq_gate_t;
+
+static rx_acq_gate_t g_rx_acq;
+
+
+/* DEBUG */
+volatile uint32_t g_dbg_acq_noise_edges;
+volatile uint32_t g_dbg_acq_rejects;
+volatile uint32_t g_dbg_acq_locks;
+volatile uint32_t g_dbg_acq_aborts;
+volatile uint32_t g_dbg_acq_frames;
+
+
 /*
  * TIM8 — 16 bit, поэтому DMA даёт uint16 timestamps.
  *
@@ -260,18 +288,38 @@ volatile uint32_t g_dbg_app_rx_file;
 static volatile bool g_rx_muted = false;
 static volatile bool g_rx_reset_requested = false;
 
+// Генераторы нижний и верхний
+#define GEN_LOW_ON_OFF_PORT		GPIOB
+#define GEN_LOW_ON_OFF_PIN		GPIO_PIN_7
+#define GEN_HIGH_ON_OFF_PORT	GPIOB
+#define GEN_HIGH_ON_OFF_PIN		GPIO_PIN_6
+// Усилители мощности нижний и верхний
+#define AMP_LOW_ON_OFF_PORT		GPIOE
+#define AMP_LOW_ON_OFF_PIN		GPIO_PIN_5
+#define AMP_HIGH_ON_OFF_PORT	GPIOG
+#define AMP_HIGH_ON_OFF_PIN		GPIO_PIN_11
+// Усилители малошумящие нижний и верхний
+#define LNA_LOW_ON_1_PORT		GPIOE
+#define LNA_LOW_ON_1_PIN		GPIO_PIN_3
+#define LNA_LOW_ON_2_PORT		GPIOE
+#define LNA_LOW_ON_2_PIN		GPIO_PIN_2
+#define LNA_HIGH_ON_1_PORT		GPIOC
+#define LNA_HIGH_ON_1_PIN		GPIO_PIN_10
+#define LNA_HIGH_ON_2_PORT		GPIOC
+#define LNA_HIGH_ON_2_PIN		GPIO_PIN_11
+
 static void rf_apply_rx_gpio(void)
 {
 	// прием
-    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET);   // D1 - 1
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_RESET); // D2 - 0
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_RESET); // D5 - 0
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9,  GPIO_PIN_RESET); // D6 - 0
+    HAL_GPIO_WritePin(GEN_LOW_ON_OFF_PORT,  GEN_LOW_ON_OFF_PIN,  GPIO_PIN_SET);    // D1 - 1
+    HAL_GPIO_WritePin(GEN_HIGH_ON_OFF_PORT, GEN_HIGH_ON_OFF_PIN, GPIO_PIN_RESET);  // D2 - 0
+    HAL_GPIO_WritePin(AMP_LOW_ON_OFF_PORT,  AMP_LOW_ON_OFF_PIN,  GPIO_PIN_RESET);  // D5 - 0
+    HAL_GPIO_WritePin(AMP_HIGH_ON_OFF_PORT, AMP_HIGH_ON_OFF_PIN, GPIO_PIN_RESET);  // D6 - 0
 
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_SET); // D15 - 1
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5,  GPIO_PIN_SET); // D14 - 1
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_SET); // A4 - 1
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9,  GPIO_PIN_SET); // A5 - 1
+    HAL_GPIO_WritePin(LNA_HIGH_ON_2_PORT, LNA_HIGH_ON_2_PIN, GPIO_PIN_SET); // D14 - 1
+    HAL_GPIO_WritePin(LNA_HIGH_ON_1_PORT, LNA_HIGH_ON_1_PIN, GPIO_PIN_SET); // D15 - 1
+    HAL_GPIO_WritePin(LNA_LOW_ON_2_PORT, LNA_LOW_ON_2_PIN,   GPIO_PIN_SET); // A4 - 1
+    HAL_GPIO_WritePin(LNA_LOW_ON_1_PORT, LNA_LOW_ON_1_PIN,   GPIO_PIN_SET); // A5 - 1
 
     HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_SET);
@@ -280,18 +328,251 @@ static void rf_apply_rx_gpio(void)
 static void rf_apply_tx_gpio(void)
 {
 	// передача
-    HAL_GPIO_WritePin(GPIOG, GPIO_PIN_14, GPIO_PIN_SET); // D1 - 1
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_15, GPIO_PIN_SET); // D2 - 1
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_11, GPIO_PIN_SET); // D5 - 1
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_9,  GPIO_PIN_SET); // D6 - 1
+    HAL_GPIO_WritePin(GEN_LOW_ON_OFF_PORT,  GEN_LOW_ON_OFF_PIN,  GPIO_PIN_SET);  // D1 - 1
+    HAL_GPIO_WritePin(GEN_HIGH_ON_OFF_PORT, GEN_HIGH_ON_OFF_PIN, GPIO_PIN_SET);  // D2 - 1
+    HAL_GPIO_WritePin(AMP_LOW_ON_OFF_PORT,  AMP_LOW_ON_OFF_PIN,  GPIO_PIN_SET);  // D5 - 1
+    HAL_GPIO_WritePin(AMP_HIGH_ON_OFF_PORT, AMP_HIGH_ON_OFF_PIN, GPIO_PIN_SET);  // D6 - 1
 
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_10, GPIO_PIN_RESET); // D15 - 0
-    HAL_GPIO_WritePin(GPIOF, GPIO_PIN_5,  GPIO_PIN_RESET); // D14 - 0
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_RESET); // A4 - 0
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9,  GPIO_PIN_RESET); // A5 - 0
+    HAL_GPIO_WritePin(LNA_HIGH_ON_2_PORT, LNA_HIGH_ON_2_PIN, GPIO_PIN_RESET); // D14 - 0
+    HAL_GPIO_WritePin(LNA_HIGH_ON_1_PORT, LNA_HIGH_ON_1_PIN, GPIO_PIN_RESET); // D15 - 0
+    HAL_GPIO_WritePin(LNA_LOW_ON_2_PORT, LNA_LOW_ON_2_PIN,   GPIO_PIN_RESET); // A4 - 0
+    HAL_GPIO_WritePin(LNA_LOW_ON_1_PORT, LNA_LOW_ON_1_PIN,   GPIO_PIN_RESET); // A5 - 0
 
     HAL_GPIO_WritePin(g_hw.rf_trans_port, g_hw.rf_trans_pin, GPIO_PIN_SET);
     HAL_GPIO_WritePin(g_hw.rf_recv_port, g_hw.rf_recv_pin, GPIO_PIN_RESET);
+}
+
+static bool rx_acq_delta_matches(
+    uint64_t delta,
+    uint32_t expected)
+{
+    const uint32_t tolerance =
+        expected *
+        MAN_RX_ACQ_TOLERANCE_PERCENT /
+        100u;
+
+    const uint32_t min =
+        expected - tolerance;
+
+    const uint32_t max =
+        expected + tolerance;
+
+    return delta >= min &&
+           delta <= max;
+}
+
+
+static bool rx_acq_delta_is_manchester(
+    uint64_t delta)
+{
+    return
+        rx_acq_delta_matches(
+            delta,
+            g_rx_chip_ticks
+        )
+        ||
+        rx_acq_delta_matches(
+            delta,
+            g_rx_chip_ticks * 2u
+        );
+}
+
+static void rx_acq_reset(void)
+{
+    memset(
+        &g_rx_acq,
+        0,
+        sizeof(g_rx_acq)
+    );
+
+    g_rx_acq.state =
+        RX_ACQ_SEARCH;
+}
+
+static void rx_acq_feed_edge(
+    uint64_t edge_tick,
+    bool have_delta,
+    uint64_t delta)
+{
+    /*
+     * SEARCH:
+     *
+     * Полноценный DSP сейчас вообще не работает.
+     */
+    if (g_rx_acq.state == RX_ACQ_SEARCH) {
+
+        ++g_dbg_acq_noise_edges;
+
+        /*
+         * Первый edge потенциального кандидата.
+         */
+        if (g_rx_acq.candidate_count == 0u) {
+
+            g_rx_acq.candidate_edges[0] =
+                edge_tick;
+
+            g_rx_acq.candidate_count = 1u;
+            g_rx_acq.valid_intervals = 0u;
+
+            return;
+        }
+
+        /*
+         * Manchester допускает интервалы
+         * примерно Tchip или 2*Tchip.
+         */
+        if (!have_delta ||
+            !rx_acq_delta_is_manchester(delta)) {
+
+            ++g_dbg_acq_rejects;
+
+            /*
+             * Старый кандидат выкидываем.
+             *
+             * Текущий edge одновременно становится
+             * началом следующего кандидата.
+             */
+            g_rx_acq.candidate_edges[0] =
+                edge_tick;
+
+            g_rx_acq.candidate_count = 1u;
+            g_rx_acq.valid_intervals = 0u;
+
+            return;
+        }
+
+
+        if (g_rx_acq.candidate_count <
+            MAN_RX_ACQ_BUFFER_EDGES) {
+
+            g_rx_acq.candidate_edges[
+                g_rx_acq.candidate_count++
+            ] = edge_tick;
+        }
+
+        ++g_rx_acq.valid_intervals;
+
+
+        /*
+         * Пока Manchester-подобных переходов мало —
+         * DSP не трогаем.
+         */
+        if (g_rx_acq.valid_intervals <
+            MAN_RX_ACQ_REQUIRED_INTERVALS) {
+
+            return;
+        }
+
+
+        /*
+         * Похоже на настоящий Manchester.
+         *
+         * Теперь запускаем дорогой DSP.
+         */
+        ++g_dbg_acq_locks;
+
+        man_rx_decoder_reset(
+            &g_decoder
+        );
+
+        g_rx_acq.state =
+            RX_ACQ_ACTIVE;
+
+        g_rx_acq.active_edges = 0u;
+
+        g_rx_acq.phase_errors_at_lock =
+            g_diag.phase_errors;
+
+        g_rx_acq.good_frames_at_lock =
+            g_diag.manchester_rx_good_frames;
+
+
+        /*
+         * КРИТИЧНО:
+         *
+         * проигрываем обратно сохранённые edges.
+         *
+         * Поэтому acquisition gate НЕ съедает
+         * начало преамбулы.
+         */
+        for (uint32_t i = 0u;
+             i < g_rx_acq.candidate_count;
+             ++i) {
+
+            man_rx_decoder_feed_edge(
+                &g_decoder,
+                g_rx_acq.candidate_edges[i]
+            );
+
+            ++g_rx_acq.active_edges;
+        }
+
+        return;
+    }
+
+
+    /*
+     * ACTIVE:
+     *
+     * Теперь DSP действительно работает.
+     */
+    man_rx_decoder_feed_edge(
+        &g_decoder,
+        edge_tick
+    );
+
+    ++g_rx_acq.active_edges;
+
+
+    /*
+     * Получили настоящий frame.
+     */
+    if (g_diag.manchester_rx_good_frames !=
+        g_rx_acq.good_frames_at_lock) {
+
+        ++g_dbg_acq_frames;
+
+        rx_acq_reset();
+
+        return;
+    }
+
+
+    /*
+     * Ложный acquisition:
+     * слишком много phase errors.
+     */
+    if ((g_diag.phase_errors -
+         g_rx_acq.phase_errors_at_lock) >=
+        MAN_RX_ACQ_MAX_PHASE_ERRORS) {
+
+        ++g_dbg_acq_aborts;
+
+        man_rx_decoder_reset(
+            &g_decoder
+        );
+
+        rx_acq_reset();
+
+        return;
+    }
+
+
+    /*
+     * Ещё одна страховка:
+     * candidate не может жить бесконечно.
+     */
+    if (g_rx_acq.active_edges >=
+        MAN_RX_ACQ_MAX_ACTIVE_EDGES) {
+
+        ++g_dbg_acq_aborts;
+
+        man_rx_decoder_reset(
+            &g_decoder
+        );
+
+        rx_acq_reset();
+    }
 }
 
 static void tx_set_idle_level(void)
@@ -1166,6 +1447,7 @@ bool Manchester_ServiceInit(const man_platform_t *platform, const man_runtime_co
     rf_apply_rx_gpio();
     g_rx_muted = false;
 	g_rf_tx_active = false;
+	rx_acq_reset();
 
     if (g_fec == NULL) {
         return false; /* Hamming is intentionally only an extension point in this revision. */
@@ -1308,7 +1590,9 @@ static void tim_ic_dsp_consumer(const uint16_t *timestamps, uint32_t count, void
         if (!g_ic_previous_valid) {
             g_ic_previous_capture = current;
             g_ic_previous_valid = true;
-            man_rx_decoder_feed_edge(&g_decoder, g_ic_virtual_tick);
+            // pre filter enabled
+            // man_rx_decoder_feed_edge(&g_decoder, g_ic_virtual_tick);
+            rx_acq_feed_edge(g_ic_virtual_tick, false, 0u);
             ++g_dbg_ic_dsp_edges;
             continue;
         }
@@ -1338,7 +1622,9 @@ static void tim_ic_dsp_consumer(const uint16_t *timestamps, uint32_t count, void
             ++g_dbg_ic_dsp_large_gaps;
         }
         g_ic_virtual_tick += (uint64_t)delta;
-        man_rx_decoder_feed_edge(&g_decoder, g_ic_virtual_tick);
+        // pre filter enabled
+        // man_rx_decoder_feed_edge(&g_decoder, g_ic_virtual_tick);
+        rx_acq_feed_edge(g_ic_virtual_tick, true, delta);
         ++g_dbg_ic_dsp_edges;
     }
 }
@@ -1355,6 +1641,8 @@ static void reset_rx_frontend(void)
      * Полностью сбрасываем Manchester DSP.
      */
     man_rx_decoder_reset(&g_decoder);
+
+    rx_acq_reset();
 
     /*
      * Сбрасываем TIM8 -> virtual timeline frontend.

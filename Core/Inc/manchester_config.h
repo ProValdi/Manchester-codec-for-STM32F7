@@ -43,6 +43,24 @@
 #define MAN_FILE_MAX_RETRIES          15u
 #define MAN_FILE_ACK_TURNAROUND_MS    3u
 
+/*
+ * RX acquisition gate.
+ *
+ * Пока не увидим достаточно последовательных интервалов,
+ * похожих на Differential Manchester, полноценный DSP
+ * вообще не запускаем.
+ */
+#define MAN_RX_ACQ_REQUIRED_INTERVALS       12u
+#define MAN_RX_ACQ_TOLERANCE_PERCENT        25u
+
+/*
+ * Защита от ложного lock.
+ */
+#define MAN_RX_ACQ_MAX_ACTIVE_EDGES          (MAN_TX_MAX_CHIPS + 256u)
+#define MAN_RX_ACQ_MAX_PHASE_ERRORS          32u
+
+#define MAN_RX_ACQ_BUFFER_EDGES              (MAN_RX_ACQ_REQUIRED_INTERVALS + 1u)
+
 /* Default DMA placement: dedicated linker section. */
 #if defined(__GNUC__)
 #define MAN_DMA_BUFFER __attribute__((section(".dma_buffer"), aligned(32)))
